@@ -49,6 +49,8 @@ require 'spree/testing_support/capybara_config'
 require 'spree/testing_support/rspec_retry_config'
 require 'spree/testing_support/image_helpers'
 
+require 'spree/page_builder/testing_support/factories'
+
 require 'spree/core/controller_helpers/strong_parameters'
 
 RSpec.configure do |config|
@@ -81,7 +83,6 @@ RSpec.configure do |config|
   end
 
   config.before(:each) do
-    Spree::Webhooks.disabled = true
     reset_spree_preferences
   end
 

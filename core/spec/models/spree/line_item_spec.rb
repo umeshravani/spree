@@ -6,6 +6,7 @@ describe Spree::LineItem, type: :model do
   let(:line_item) { order.line_items.first }
 
   it_behaves_like 'metadata'
+  it_behaves_like 'lifecycle events'
 
   describe 'Validations' do
     describe 'ensure_proper_currency' do
@@ -179,9 +180,9 @@ describe Spree::LineItem, type: :model do
       line_item.currency = nil
       line_item.copy_price
       variant = line_item.variant
-      expect(line_item.price).to eq(variant.price)
+      expect(line_item.price).to eq(variant.amount_in(order.currency))
       expect(line_item.cost_price).to eq(variant.cost_price)
-      expect(line_item.currency).to eq(variant.currency)
+      expect(line_item.currency).to eq(order.currency)
     end
 
     context "variant price amount is equal 0" do
@@ -561,6 +562,38 @@ describe Spree::LineItem, type: :model do
 
     it 'returns the weight unit for the line item' do
       expect(line_item.weight_unit).to eq('kg')
+    end
+  end
+
+  describe '#discounted_price' do
+    subject(:discounted_price) { line_item.discounted_price }
+
+    let(:line_item) { create(:line_item, price: 10, quantity: quantity) }
+    let(:quantity) { 4 }
+    let(:promo_total) { -5 }
+
+    before do
+      line_item.update_column(:promo_total, promo_total)
+    end
+
+    it 'returns the discounted price for the line item' do
+      expect(discounted_price).to eq(8.75)
+    end
+
+    context 'when line item promo_total is zero' do
+      let(:promo_total) { 0 }
+
+      it 'returns the price for the line item' do
+        expect(discounted_price).to eq(10)
+      end
+    end
+
+    context 'when quantity is zero' do
+      let(:quantity) { 0 }
+
+      it 'returns the price for the line item' do
+        expect(discounted_price).to eq(10)
+      end
     end
   end
 end

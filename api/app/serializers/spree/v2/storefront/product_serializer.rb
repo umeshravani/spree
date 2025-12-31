@@ -3,6 +3,7 @@ module Spree
     module Storefront
       class ProductSerializer < BaseSerializer
         include ::Spree::Api::V2::DisplayMoneyHelper
+        include Spree::Api::V2::PublicMetafieldsConcern
 
         set_type :product
 
@@ -51,11 +52,11 @@ module Spree
         attribute :tags, &:tag_list
         attribute :labels, &:label_list
 
-        has_many :variants
-        has_many :option_types
-        has_many :product_properties
+        has_many :variants, serializer: Spree.api.storefront_variant_serializer
+        has_many :option_types, serializer: Spree.api.storefront_option_type_serializer
+        has_many :product_properties, serializer: Spree.api.storefront_product_property_serializer
 
-        has_many :taxons, serializer: :taxon, record_type: :taxon do |object, params|
+        has_many :taxons, serializer: Spree.api.storefront_taxon_serializer, record_type: :taxon do |object, params|
           object.taxons_for_store(params[:store]).order(:id)
         end
 
@@ -64,19 +65,19 @@ module Spree
                  object_method_name: :variant_images,
                  id_method_name: :variant_image_ids,
                  record_type: :image,
-                 serializer: :image
+                 serializer: Spree.api.storefront_image_serializer
 
         has_one :default_variant,
                 object_method_name: :default_variant,
                 id_method_name: :default_variant_id,
                 record_type: :variant,
-                serializer: :variant
+                serializer: Spree.api.storefront_variant_serializer
 
         has_one :primary_variant,
                 object_method_name: :master,
                 id_method_name: :master_id,
                 record_type: :variant,
-                serializer: :variant
+                serializer: Spree.api.storefront_variant_serializer
       end
     end
   end

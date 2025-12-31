@@ -1,10 +1,8 @@
 module Spree
   module Admin
     module BaseHelper
-      include Spree::ImagesHelper
-
       def render_admin_partials(section, options = {})
-        Rails.application.config.spree_admin.send(section).map do |partial|
+        Spree.admin.partials.send(section.to_s.gsub('_partials', '').to_sym).map do |partial|
           render partial, options
         end.join.html_safe
       end
@@ -34,11 +32,16 @@ module Spree
       # check if the current controller is a settings controller
       # this is used to display different sidebar navigation for settings pages
       # @return [Boolean]
+      def settings_area?
+        @settings_area.present?
+      end
+
       def settings_active?
-        @settings_active || %w[admin_users audits custom_domains exports imports invitations oauth_applications
+        Spree::Deprecation.warn('settings_active? is deprecated and will be removed in Spree 6.0. Please use settings_area? instead')
+        @settings_active || %w[admin_users audits custom_domains exports invitations oauth_applications
                                payment_methods refund_reasons reimbursement_types return_authorization_reasons roles
                                shipping_categories shipping_methods stock_locations store_credit_categories
-                               stores tax_categories tax_rates webhooks webhooks_subscribers zones].include?(controller_name)
+                               stores tax_categories tax_rates webhooks webhooks_subscribers zones policies metafield_definitions].include?(controller_name) || settings_area?
       end
 
       # @return [Array<String>] the available countries for checkout
@@ -46,38 +49,12 @@ module Spree
         @available_countries_iso ||= current_store.countries_available_for_checkout.pluck(:iso)
       end
 
-      # render an avatar for a user
-      # if user doesn't have an avatar, the user's initials will be displayed on a rounded background
-      # @param user [Spree::User] the user to render the avatar for
-      # @param options [Hash] the options for the avatar
-      # @option options [Integer] :width the width of the avatar, default: 128
-      # @option options [Integer] :height the height of the avatar, default: 128
-      # @option options [String] :class the CSS class(es) of the avatar, default: 'avatar'
-      # @return [String] the avatar
-      def render_avatar(user, options = {})
-        return unless user.present?
-
-        options[:width] ||= 128
-        options[:height] ||= 128
-        options[:class] ||= 'avatar'
-
-        if user.respond_to?(:avatar) && user.avatar.attached? && user.avatar.variable?
-          spree_image_tag(
-            user.avatar,
-            width: options[:width],
-            height: options[:height],
-            class: options[:class],
-            style: "width: #{options[:width]}px; height: #{options[:height]}px;"
-          )
-        else
-          content_tag(:div, user.name&.initials, class: options[:class], style: "width: #{options[:width]}px; height: #{options[:height]}px;")
-        end
-      end
-
       # returns the available display on options, eg backend, frontend, both
       # @return [Array<Array<String, String>>] the available display on options
-      def display_on_options
-        Spree::DisplayOn::DISPLAY.map do |display_on|
+      def display_on_options(model = nil)
+        model ||= Spree::DisplayOn
+
+        model::DISPLAY.map do |display_on|
           [Spree.t("admin.display_on_options.#{display_on}"), display_on]
         end
       end
@@ -89,7 +66,15 @@ module Spree
       # @return [String] the error message
       def error_message_on(object, method, _options = {})
         object = convert_to_model(object)
-        obj = object.respond_to?(:errors) ? object : instance_variable_get("@#{object}")
+
+        obj = if object.respond_to?(:errors)
+                object
+              else
+                # Handle nested attributes like "variant[prices_attributes][0]"
+                # by extracting the base object name
+                object_name = object.to_s.split('[').first
+                instance_variable_get("@#{object_name}") if object_name.present?
+              end
 
         if obj && obj.errors[method].present?
           errors = safe_join(obj.errors[method], '<br />'.html_safe)
@@ -115,11 +100,12 @@ module Spree
         icon_name = 'plus' if icon_name == 'add'
         icon_name = 'x' if icon_name == 'cancel'
 
-        styles = options[:style]
-        styles ||= ''
-        styles += ";font-size: #{options[:height]}px !important;line-height:#{options[:height]}px !important" if options[:height]
+        options[:style] ||= ''
+        options[:style] += ";font-size: #{options[:height]}px !important;line-height:#{options[:height]}px !important" if options[:height]
 
-        content_tag :i, nil, class: "ti ti-#{icon_name} #{options[:class]}", style: styles
+        options[:class] = "ti ti-#{icon_name} #{options[:class]}"
+
+        content_tag :i, nil, options
       end
 
       # returns the flag emoji for a country
@@ -164,12 +150,12 @@ module Spree
                         when :integer
                           {
                             size: 10,
-                            class: 'input_integer form-control'
+                            class: 'input_integer form-input'
                           }
                         when :decimal
                           {
                             size: 10,
-                            class: 'input_decimal form-control',
+                            class: 'input_decimal form-input',
                             step: options[:step] || 0.01
                           }
                         when :boolean
@@ -179,23 +165,23 @@ module Spree
                         when :string
                           {
                             size: 10,
-                            class: 'input_string form-control'
+                            class: 'input_string form-input'
                           }
                         when :password
                           {
                             size: 10,
-                            class: 'password_string form-control'
+                            class: 'password_string form-input'
                           }
                         when :text
                           {
                             rows: 15,
                             cols: 85,
-                            class: 'form-control'
+                            class: 'form-input'
                           }
                         else
                           {
                             size: 10,
-                            class: 'input_string form-control'
+                            class: 'input_string form-input'
                           }
                         end
 
@@ -222,11 +208,11 @@ module Spree
         case key
         when :currency
           content_tag(:div, form.label("preferred_#{key}", Spree.t(key, scope: i18n_scope)) +
-            form.currency_select("preferred_#{key}", current_store.supported_currencies.split(','), {}, { class: 'custom-select', disabled: current_store.supported_currencies.split(',').count == 1 }),
+            form.select("preferred_#{key}", current_store.supported_currencies.split(','), {}, { data: { controller: 'autocomplete-select' }, disabled: current_store.supported_currencies.split(',').count == 1 }),
                       class: 'form-group', id: [object.class.to_s.parameterize, 'preference', key].join('-'))
         else
           if object.preference_type(key).to_sym == :boolean
-            content_tag(:div, class: 'form-group custom-control custom-checkbox') do
+            content_tag(:div, class: 'form-group custom-control form-checkbox') do
               preference_field_for(form, "preferred_#{key}", type: object.preference_type(key)) +
                 form.label(
                   "preferred_#{key}",
@@ -256,16 +242,17 @@ module Spree
       # @option options [String] :title the title of the button
       # @return [String] the button
       def clipboard_button(options = {})
-        options[:class] ||= 'btn btn-clipboard with-tip'
+        options[:class] ||= 'btn btn-light btn-sm btn-clipboard'
+        options[:icon_class] ||= 'mr-0 text-sm'
         options[:type] ||= 'button'
         options[:data] ||= {}
         options[:data][:action] = 'clipboard#copy'
         options[:data][:clipboard_target] = 'button'
-        options[:data][:title] = Spree.t('admin.copy_to_clipboard')
+        options[:data][:controller] = 'tooltip'
         options[:aria_label] ||= Spree.t('admin.copy_to_clipboard') # screen-reader label
 
         content_tag(:button, options) do
-          icon('copy', class: 'mr-0 font-size-sm')
+          icon('copy', class: options[:icon_class]) + tooltip(Spree.t('admin.copy_to_clipboard'))
         end
       end
 
@@ -275,15 +262,17 @@ module Spree
       # @option options [String] :class the CSS class(es) of the component
       # @option options [Hash] :data the data attributes for the component
       # @option options [String] :title the title of the component
+      # @option options [String] :button_class the CSS class(es) of the button
+      # @option options [String] :icon_class the CSS class(es) of the icon
       # @return [String] the component
       def clipboard_component(text, options = {})
         options[:data] ||= {}
         options[:data][:controller] = 'clipboard'
-        options[:data][:clipboard_success_content_value] ||= raw(icon('check', class: 'mr-0 font-size-sm'))
+        options[:data][:clipboard_success_content_value] ||= raw(icon('check', class: options[:icon_class]))
 
-        content_tag(:span, data: options[:data]) do
+        content_tag(:span, data: options[:data], class: options[:class]) do
           hidden_field_tag(:clipboard_source, text, data: { clipboard_target: 'source' }) +
-            clipboard_button
+            clipboard_button(class: options[:button_class], icon_class: options[:icon_class])
         end
       end
 
@@ -299,7 +288,9 @@ module Spree
         percentage = (value.to_f / max * 100).round
 
         content_tag(:div, class: 'progress') do
-          content_tag(:div, { class: 'progress-bar', role: 'progressbar', style: "width: #{percentage}%", aria: { valuenow: value, valuemin: min, valuemax: max } }) do
+          content_tag(:div,
+                      { class: 'progress-bar', role: 'progressbar', style: "width: #{percentage}%",
+                        aria: { valuenow: value, valuemin: min, valuemax: max } }) do
           end
         end
       end
@@ -328,7 +319,26 @@ module Spree
       # @param time [Time] the time to format
       # @return [String] the local time ago
       def spree_time_ago(time, options = {})
-        local_time_ago(time, options)
+        return '' if time.blank?
+
+        options[:data] ||= {}
+        options[:data][:controller] = 'tooltip'
+
+        # Generate the time ago element with tooltip
+        content_tag(:span, options) do
+          tooltip_text = spree_time(time)
+          local_time_ago(time, class: '', title: nil) + tooltip(tooltip_text)
+        end
+      end
+
+      def tooltip(text = nil, &block)
+        content_tag(:span, role: 'tooltip', data: { tooltip_target: 'tooltip' }, class: 'tooltip-container') do
+          if block_given?
+            capture(&block)
+          else
+            text
+          end
+        end
       end
     end
   end

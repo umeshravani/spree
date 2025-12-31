@@ -1,17 +1,19 @@
-<% record = @object || @customer_return || @order || @product || @vendor || @user || @admin_user || @taxon || @store_credit %>
-<% record = nil if @user&.is_a?(Spree.admin_user_class) %>
+<% record = @object || @customer_return || @order || @product || @vendor || @user || @admin_user || @taxon || @store_credit || @store %>
 
 <% show_record_subtitle = record && record.persisted? && record.has_attribute?(:updated_at) %>
 <% content_for(:page_subtitle) do %>
-  <%= spree_time record.updated_at, class: 'badge badge-light with-tip', title: 'Last update' %>
+  <span class="badge badge-light" data-controller="tooltip">
+    <%= spree_time record.updated_at %>
+    <%= tooltip(Spree.t(:updated_at)) %>
+  </span>
 <% end if show_record_subtitle && !content_for(:page_subtitle) %>
 
 <% if content_for?(:page_title) %>
-  <header id="page-header" class="container-fluid" data-controller="sticky">
-    <h3 class="page-header-title mb-0 d-flex align-items-center gap-3">
+  <header id="page-header" class="container mx-auto px-4 max-w-screen-xl" data-controller="sticky">
+    <h3 class="page-header-title mb-0 flex items-center gap-4">
       <%= yield :page_title %>
     </h3>
-    <div id="page_actions" class="ml-auto page-actions d-flex align-items-center gap-2">
+    <div id="page_actions" class="ml-auto page-actions flex items-center gap-2">
       <%= yield :page_actions if content_for?(:page_actions) %>
 
       <% if action_name == 'edit' && @object %>
@@ -20,13 +22,20 @@
       <% end %>
 
       <% if show_record_subtitle || content_for(:page_actions_dropdown) %>
-        <div class="dropdown h-100" id="page_actions_dropdown">
-          <%= link_to '#', class: 'btn btn-light bg-transparent h-100 p-2', data: { toggle: 'dropdown' }, id: 'more-actions-link' do %>
+        <%= dropdown id: 'page_actions_dropdown', portal: false do %>
+          <%= dropdown_toggle id: 'more-actions-link', class: 'btn-light h-[35px] px-2' do %>
             <%= icon 'dots-vertical', class: 'mr-0' %>
           <% end %>
-          <div class="dropdown-menu dropdown-menu-right">
-            <%= yield :page_actions_dropdown if content_for(:page_actions_dropdown) %>
-            <% if record %>
+          <%= dropdown_menu id: 'page_actions_dropdown_menu' do %>
+            <% if content_for?(:page_actions_dropdown) %>
+              <%= yield :page_actions_dropdown %>
+              <div class="dropdown-divider"></div>
+            <% end %>
+            <% if record && record.persisted? %>
+              <%= link_to_edit_metafields(record) %>
+              <%= link_to_edit_translations(record) %>
+              <%= link_to_show_json(record) %>
+
               <% if record.respond_to?(:audits) && spree.respond_to?(:admin_audits_path) && defined?(Audited) && can?(:read, Audited.audit_class) %>
                 <a href="<%= spree.admin_audits_path(q: { auditable_id_eq: record.id, auditable_type_eq: record.class.to_s }) %>" target="_blank" class="dropdown-item">
                   <%= icon 'history' %>
@@ -34,17 +43,17 @@
                 </a>
               <% end %>
               <% if record.respond_to?(:number) %>
-                <div data-controller="clipboard">
+                <div data-controller="clipboard" data-clipboard-success-content-value='<%= icon('check') + ' ' + Spree.t(:copied) %>'>
                   <%= hidden_field_tag :record_number, record.number, data: { clipboard_target: 'source' } %>
-                  <button data-action="clipboard#copy" class="text-left dropdown-item">
+                  <button data-action="clipboard#copy" class="text-left dropdown-item" data-clipboard-target="button">
                     <%= icon 'copy' %>
                     <%= 'Copy number' %>
                   </button>
                 </div>
               <% end %>
-              <div data-controller="clipboard">
+              <div data-controller="clipboard" data-clipboard-success-content-value='<%= icon('check') + ' ' + Spree.t(:copied) %>'>
                 <%= hidden_field_tag :record_id, record.id, data: { clipboard_target: 'source' } %>
-                <button data-action="clipboard#copy" class="text-left dropdown-item">
+                <button data-action="clipboard#copy" class="text-left dropdown-item" data-clipboard-target="button">
                   <%= icon 'copy' %>
                   <%= Spree.t(:copy_id) %>
                 </button>
@@ -52,27 +61,12 @@
 
               <% if defined?(object_url) && %w[show edit].include?(action_name) && record.respond_to?(:can_be_deleted?) && record.can_be_deleted? && can?(:destroy, record) %>
                 <div class="dropdown-divider"></div>
-                <%= link_to_with_icon 'trash', Spree.t('actions.destroy'), object_url, class: 'dropdown-item btn-danger', data: { turbo_method: :delete, turbo_confirm: Spree.t(:are_you_sure) } %>
+                <%= link_to_with_icon 'trash', Spree.t('actions.destroy'), object_url, class: 'dropdown-item text-red-600 hover:bg-red-100', data: { turbo_method: :delete, turbo_confirm: Spree.t(:are_you_sure) } %>
               <% end %>
             <% end %>
-          </div>
-        </div>
+          <% end %>
+        <% end%>
       <% end %>
     </div>
   </header>
-<% end %>
-
-<% if content_for?(:page_tabs) %>
-  <div class="container-fluid" id="page-tabs">
-    <ul class="nav">
-      <%= yield :page_tabs %>
-    </ul>
-  </div>
-<% end %>
-<% if content_for(:page_alerts) %>
-  <div class="container">
-    <div class="page-alerts">
-      <%= yield(:page_alerts) %>
-    </div>
-  </div>
 <% end %>

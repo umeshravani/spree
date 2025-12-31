@@ -8,10 +8,10 @@ module Spree
 
     include FriendlyId
     include Spree::TranslatableResource
+    include Spree::Metafields
     include Spree::Metadata
     include Spree::Stores::Setup
     include Spree::Stores::Socials
-    include Spree::Webhooks::HasWebhooks if defined?(Spree::Webhooks::HasWebhooks)
     include Spree::Security::Stores if defined?(Spree::Security::Stores)
     include Spree::UserManagement
 
@@ -104,29 +104,17 @@ module Spree
     has_many :custom_domains, class_name: 'Spree::CustomDomain', dependent: :destroy
     has_one :default_custom_domain, -> { where(default: true) }, class_name: 'Spree::CustomDomain'
 
-    has_many :posts, class_name: 'Spree::Post'
-    has_many :post_categories, class_name: 'Spree::PostCategory'
+    has_many :posts, class_name: 'Spree::Post', dependent: :destroy, inverse_of: :store
+    has_many :post_categories, class_name: 'Spree::PostCategory', dependent: :destroy, inverse_of: :store
 
     has_many :integrations, class_name: 'Spree::Integration'
 
     has_many :gift_cards, class_name: 'Spree::GiftCard', dependent: :destroy
 
-    #
-    # Page Builder associations
-    #
-    has_many :themes, -> { without_previews }, class_name: 'Spree::Theme', dependent: :destroy, inverse_of: :store
-    has_many :theme_previews,
-             -> { only_previews },
-             class_name: 'Spree::Theme',
-             through: :themes,
-             source: :previews,
-             inverse_of: :store,
-             dependent: :destroy
-    has_one :default_theme, -> { without_previews.where(default: true) }, class_name: 'Spree::Theme', inverse_of: :store
-    has_many :theme_pages, class_name: 'Spree::Page', through: :themes, source: :pages
-    has_many :theme_page_previews, class_name: 'Spree::Page', through: :theme_pages, source: :previews
-    has_many :pages, -> { without_previews.custom }, class_name: 'Spree::Pages::Custom', dependent: :destroy, as: :pageable
-    has_many :page_previews, class_name: 'Spree::Pages::Custom', through: :pages, as: :pageable, source: :previews
+    has_many :policies, class_name: 'Spree::Policy', dependent: :destroy, as: :owner
+
+    has_many :webhook_endpoints, class_name: 'Spree::WebhookEndpoint', dependent: :destroy, inverse_of: :store
+    has_many :webhook_deliveries, through: :webhook_endpoints, class_name: 'Spree::WebhookDelivery'
 
     #
     # ActionText
@@ -184,7 +172,7 @@ module Spree
     after_create :ensure_default_post_categories_are_created
     after_create :import_products_from_store, if: -> { import_products_from_store_id.present? }
     after_create :import_payment_methods_from_store, if: -> { import_payment_methods_from_store_id.present? }
-    after_create :create_default_theme
+    after_create :create_default_policies
     before_destroy :validate_not_last, unless: :skip_validate_not_last
     before_destroy :pass_default_flag_to_other_store
     after_commit :clear_cache
@@ -203,7 +191,11 @@ module Spree
     delegate :iso, to: :default_country, prefix: true, allow_nil: true
 
     def self.current(url = nil)
-      Spree::Dependencies.current_store_finder.constantize.new(url: url).execute || Spree::Current.store
+      if url.present?
+        Spree.current_store_finder.new(url: url).execute
+      else
+        Spree::Current.store
+      end
     end
 
     # FIXME: we need to drop `or_initialize` in v5
@@ -320,15 +312,20 @@ module Spree
       formatted_custom_domain || formatted_url
     end
 
+    # Returns the countries available for checkout for the store or creates a new one if it doesn't exist
+    # @return [Array<Spree::Country>]
     def countries_available_for_checkout
       @countries_available_for_checkout ||= Rails.cache.fetch(countries_available_for_checkout_cache_key) do
-        checkout_zone.try(:country_list) || Spree::Country.all
+        (checkout_zone.try(:country_list) || Spree::Country.all).to_a
       end
     end
 
+    # Returns the states available for checkout for the store or creates a new one if it doesn't exist
+    # @param country [Spree::Country] the country to get the states for
+    # @return [Array<Spree::State>]
     def states_available_for_checkout(country)
       Rails.cache.fetch(states_available_for_checkout_cache_key(country)) do
-        checkout_zone.try(:state_list_for, country) || country.states
+        (checkout_zone.try(:state_list_for, country) || country.states).to_a
       end
     end
 
@@ -339,7 +336,7 @@ module Spree
     end
 
     def supported_shipping_zones
-      @supported_shipping_zones ||= if checkout_zone_id.present?
+      @supported_shipping_zones ||= if checkout_zone.present?
                                       [checkout_zone]
                                     else
                                       Spree::Zone.includes(zone_members: :zoneable).all
@@ -401,6 +398,14 @@ module Spree
       return if payment_method_ids.empty?
 
       StorePaymentMethod.insert_all(payment_method_ids.map { |payment_method_id| { store_id: id, payment_method_id: payment_method_id } })
+    end
+
+    %w[customer_terms_of_service customer_privacy_policy customer_returns_policy customer_shipping_policy].each do |policy_method|
+      define_method policy_method do
+        Spree::Deprecation.warn("Store##{policy_method} is deprecated and will be removed in Spree 6.0. Please use Store#policies instead.")
+
+        ActionText::RichText.find_by(name: policy_method, record: self)
+      end
     end
 
     private
@@ -496,6 +501,13 @@ module Spree
       post_categories.find_or_create_by(title: Spree.t('default_post_categories.news'))
     end
 
+    def create_default_policies
+      policies.find_or_create_by(name: Spree.t('terms_of_service'))
+      policies.find_or_create_by(name: Spree.t('privacy_policy'))
+      policies.find_or_create_by(name: Spree.t('returns_policy'))
+      policies.find_or_create_by(name: Spree.t('shipping_policy'))
+    end
+
     # code is slug, so we don't want to generate new slug when code changes
     # we use friendlyId only for history feature
     def should_generate_new_friendly_id?
@@ -532,13 +544,6 @@ module Spree
       return unless Spree.root_domain.present?
 
       self.url = [code, Spree.root_domain].join('.')
-    end
-
-    def create_default_theme
-      themes.find_or_initialize_by(default: true) do |theme|
-        theme.name = Spree.t(:default_theme_name)
-        theme.save!
-      end
     end
   end
 end

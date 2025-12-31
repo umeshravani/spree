@@ -153,6 +153,14 @@ describe Spree::Store, type: :model, without_global_store: true do
           expect(store.code).to match(/store-\d+/)
         end
       end
+
+      describe '#create_default_policies' do
+        let(:store) { build(:store) }
+
+        it 'creates default policies' do
+          expect { store.save! }.to change(Spree::Policy, :count).by(4)
+        end
+      end
     end
 
     describe '#set_url' do
@@ -202,15 +210,6 @@ describe Spree::Store, type: :model, without_global_store: true do
         expect(store.reload.taxons.automatic.count).to eq(2)
         expect(store.taxons.automatic.pluck(:name)).to contain_exactly('New arrivals', 'On sale')
         expect(store.taxons.automatic.pluck(:taxonomy_id).uniq).to contain_exactly(collections_taxonomy.id)
-      end
-    end
-
-    describe '#create_default_theme' do
-      let(:store) { build(:store) }
-
-      it 'creates a default theme' do
-        expect(store).to receive(:create_default_theme)
-        store.save!
       end
     end
 
@@ -422,7 +421,7 @@ describe Spree::Store, type: :model, without_global_store: true do
       include_context 'with checkout zone not set'
 
       it 'returns list of all countries' do
-        checkout_available_countries_ids = subject.countries_available_for_checkout.ids
+        checkout_available_countries_ids = subject.countries_available_for_checkout.pluck(:id)
         all_countries_ids                = Spree::Country.all.ids
 
         expect(checkout_available_countries_ids).to eq(all_countries_ids)

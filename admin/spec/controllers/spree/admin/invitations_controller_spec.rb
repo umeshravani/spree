@@ -230,7 +230,7 @@ RSpec.describe Spree::Admin::InvitationsController, type: :controller do
     let(:another_user) { create(:user) }
 
     before do
-      allow(controller).to receive(:current_ability).and_return(Spree::Dependencies.ability_class.constantize.new(another_user))
+      allow(controller).to receive(:current_ability).and_return(Spree.ability_class.new(another_user))
       allow(controller).to receive(:try_spree_current_user).and_return(another_user)
       put :accept, params: { id: invitation.id }
     end
@@ -252,10 +252,10 @@ RSpec.describe Spree::Admin::InvitationsController, type: :controller do
   describe 'PUT #resend' do
     stub_authorization!
 
-    it 'resends the invitation' do
+    it 'calls resend! on the invitation' do
       invitation
-      clear_enqueued_jobs
-      expect { put :resend, params: { id: invitation.id } }.to have_enqueued_job(ActionMailer::MailDeliveryJob)
+      expect_any_instance_of(Spree::Invitation).to receive(:resend!)
+      put :resend, params: { id: invitation.id }
     end
 
     it 'redirects to invitations path' do

@@ -1,23 +1,21 @@
 module Spree
   module Admin
     class AdminUsersController < BaseController
-      add_breadcrumb Spree.t(:users), :admin_admin_users_path
+      include Spree::Admin::SettingsConcern
 
       skip_before_action :authorize_admin, only: [:new, :create]
       before_action :load_parent, except: [:new, :create]
       before_action :load_roles, except: [:index]
       before_action :load_invitation, only: [:new, :create]
-      before_action :load_admin_user, only: [:show, :edit, :update]
+      before_action :load_admin_user, only: [:show, :edit, :update, :destroy]
 
-      layout :choose_layout
+      helper_method :object_url
 
       # GET /admin/admin_users
       def index
-        params[:q] ||= {}
-        params[:q][:s] ||= 'created_at asc'
         @search = scope.includes(role_users: :role, avatar_attachment: :blob).
-                        where(role_users: { resource: @parent }).
-                        ransack(params[:q])
+                  where(role_users: { resource: @parent }).
+                  ransack(params[:q])
         @collection = @search.result
       end
 
@@ -71,6 +69,17 @@ module Spree
         end
       end
 
+      # DELETE /admin/admin_users/:id
+      def destroy
+        authorize! :destroy, @admin_user
+        if @admin_user.destroy
+          redirect_to spree.admin_admin_users_path, status: :see_other, notice: flash_message_for(@admin_user, :successfully_removed)
+        else
+          flash[:error] = @admin_user.errors.full_messages.to_sentence
+          redirect_to spree.admin_admin_users_path, status: :see_other
+        end
+      end
+
       private
 
       def permitted_params
@@ -97,7 +106,7 @@ module Spree
 
       # for self signup flow, we use the minimal layout
       def choose_layout
-        @invitation.present? ? 'spree/minimal' : 'spree/admin'
+        @invitation.present? ? 'spree/minimal' : 'spree/admin_settings'
       end
 
       def load_roles
@@ -106,6 +115,10 @@ module Spree
 
       def model_class
         Spree.admin_user_class
+      end
+
+      def object_url
+        spree.admin_admin_user_path(@admin_user)
       end
     end
   end

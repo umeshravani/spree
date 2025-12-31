@@ -1,5 +1,4 @@
 <% content_for :page_actions_dropdown do %>
-  <%= link_to_edit_translations(@product) %>
   <%= link_to_with_icon(
     "files",
     Spree.t(:digital_assets),
@@ -8,8 +7,6 @@
   ) if can?(:manage, Spree::Digital) %>
 
   <%= render_admin_partials(:product_dropdown_partials, product: @product) %>
-
-  <div class="dropdown-divider"></div>
 
   <%= external_page_preview_link(@product) %>
 

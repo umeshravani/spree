@@ -4,11 +4,9 @@ module Spree
 
     include Spree::ParameterizableName
     include Spree::UniqueName
+    include Spree::Metafields
     include Spree::Metadata
     include Spree::TranslatableResource
-    if defined?(Spree::Webhooks::HasWebhooks)
-      include Spree::Webhooks::HasWebhooks
-    end
 
     TRANSLATABLE_FIELDS = %i[presentation].freeze
     translates(*TRANSLATABLE_FIELDS, column_fallback: !Spree.always_use_translations?)
@@ -61,6 +59,7 @@ module Spree
 
     # legacy, name itself is now parameterized before saving
     def filter_param
+      Spree::Deprecation.warn('Spree::OptionType#filter_param is deprecated and will be removed in Spree 6. Please use Spree::OptionType#name instead.')
       name.parameterize
     end
 

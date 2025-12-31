@@ -1,6 +1,7 @@
 module Spree
   class Post < Spree.base_class
     include Spree::SingleStoreResource
+    include Spree::Metafields
     extend FriendlyId
 
     friendly_id :slug_candidates, use: %i[slugged scoped history], scope: %i[store_id deleted?]
@@ -36,15 +37,15 @@ module Spree
     #
     # Associations
     #
-    belongs_to :author, class_name: Spree.admin_user_class.to_s
-    belongs_to :store, class_name: 'Spree::Store'
-    belongs_to :post_category, class_name: 'Spree::PostCategory', optional: true
+    belongs_to :author, class_name: Spree.admin_user_class.to_s, optional: true
+    belongs_to :store, class_name: 'Spree::Store', inverse_of: :posts
+    belongs_to :post_category, class_name: 'Spree::PostCategory', optional: true, touch: true, inverse_of: :posts
     alias category post_category
 
     #
     # Validations
     #
-    validates :title, :store, :author, presence: true
+    validates :title, :store, presence: true
     validates :slug, presence: true, uniqueness: { scope: :store_id, conditions: -> { where(deleted_at: nil) } }
     validates :meta_title, length: { maximum: 160 }, allow_blank: true
     validates :meta_description, length: { maximum: 320 }, allow_blank: true
@@ -72,12 +73,6 @@ module Spree
 
     def published?
       published_at.present?
-    end
-
-    def page_builder_url
-      return unless Spree::Core::Engine.routes.url_helpers.respond_to?(:post_path)
-
-      Spree::Core::Engine.routes.url_helpers.post_path(self)
     end
 
     def publish(date = nil)

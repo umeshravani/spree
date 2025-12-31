@@ -53,6 +53,13 @@ en:
       spree/gift_card:
         amount_used: Amount used
         expires_at: Expires at
+      spree/import:
+        preferred_delimiter: Delimiter
+      spree/import_mapping:
+        file_column: File Column
+        schema_field: Schema Field
+      spree/import_row:
+        row_number: Number
       spree/inventory_unit:
         state: State
       spree/invitation:
@@ -60,6 +67,8 @@ en:
       spree/line_item:
         price: Price
         quantity: Quantity
+      spree/metafield_definition:
+        namespace: Namespace
       spree/option_type:
         filterable: Filterable
         name: Name
@@ -96,11 +105,16 @@ en:
         phone: Shipping address phone
         state: Shipping address state
         zipcode: Shipping address zipcode
+      spree/page_link:
+        open_in_new_tab: Open in new tab
       spree/payment:
         amount: Amount
         number: Number
       spree/payment_method:
         name: Name
+      spree/policy:
+        body: Body
+        owner: Policy for
       spree/product:
         available_on: Available On
         cost_currency: Cost Currency
@@ -165,6 +179,9 @@ en:
         preferred_limit_digital_download_days: Limit digital links download days
         seo_robots: SEO Robots
         seo_title: SEO Title
+        storefront_custom_code_body_end: Custom Code before closing body tag
+        storefront_custom_code_body_start: Custom Code after opening body tag
+        storefront_custom_code_head: Custom Code in page head
         url: Site URL
       spree/store_credit:
         amount_used: Amount used
@@ -181,9 +198,11 @@ en:
         name: Name
         permalink: Permalink
         position: Position
+        sort_order: Sort Order
       spree/taxonomy:
         name: Name
       spree/user:
+        avatar: Avatar
         email: Email
         password: Password
         password_confirmation: Password Confirmation
@@ -240,6 +259,12 @@ en:
             attachment:
               attachment_must_be_present: must be present
               not_allowed_content_type: has not allowed content type
+        spree/import:
+          attributes:
+            attachment:
+              content_type: has not allowed content type
+            type:
+              inclusion: is not included in the list of allowed types
         spree/legacy_user:
           attributes:
             bill_address_id:
@@ -590,6 +615,7 @@ en:
     add_country: Add Country
     add_coupon_code: Add Coupon Code
     add_gift_card: Add Gift Card
+    add_link: Add link
     add_new_address: Add new address
     add_new_credit_card: Add a new card
     add_new_header: Add New Header
@@ -598,6 +624,7 @@ en:
     add_new_style: Add New Style
     add_one: Add One
     add_option_value: Add Option Value
+    add_page_block: Add Block
     add_product: Add Product
     add_product_properties: Add Product Properties
     add_products: Add Products
@@ -675,6 +702,9 @@ en:
     analytics: Analytics
     and: and
     api_keys: API keys
+    apis:
+      platform: Platform API
+      storefront: Storefront API
     apply: Apply
     apply_only_on_full_priced_items: Apply only on full priced items
     apply_store_credit: Apply Store Credit
@@ -726,6 +756,7 @@ en:
     body_tag_end: Body tag end
     body_tag_start: Body tag start
     both: Both
+    brand: Brand
     breadcrumbs: Breadcrumbs
     calculated_reimbursements: Calculated Reimbursements
     calculator: Calculator
@@ -819,6 +850,7 @@ en:
     continue_selling_when_out_of_stock: Continue selling when out of stock
     continue_shopping: Continue shopping
     continue_without_logging_in: Continue without logging in
+    copied: Copied!
     copy: Copy
     copy_id: Copy ID
     copy_link: Copy link
@@ -869,7 +901,6 @@ en:
     credits: Credits
     currencies: Currencies
     currency: Currency
-    currency_and_country_help: This determines which vendors you can connect with and what customers see on your store.
     currency_settings: Currency Settings
     current: Current
     current_password: Current password
@@ -898,6 +929,7 @@ en:
     default_billing_address: Default billing address
     default_country: Default Country
     default_country_cannot_be_deleted: Default country cannot be deleted
+    default_country_help: Country that will be used for the default shipping and billing addresses on Checkout
     default_currency: Default currency
     default_locale: Default locale
     default_post_categories:
@@ -1059,6 +1091,7 @@ en:
     field: Field
     filename: Filename
     fill_in_customer_info: Please fill in customer info
+    filled: Filled
     filter: Filter
     filter_results: Filter Results
     filterable: Filterable
@@ -1141,6 +1174,7 @@ en:
     images: Images
     implement_eligible_for_return: 'Must implement #eligible_for_return? for your EligibilityValidator.'
     implement_requires_manual_intervention: 'Must implement #requires_manual_intervention? for your EligibilityValidator.'
+    import: Import
     import_payment_methods_from: Import payment methods from
     import_products_from: Import products from
     in_stock: In Stock
@@ -1163,6 +1197,8 @@ en:
     intercept_email_address: Intercept Email Address
     intercept_email_instructions: Override email recipient and replace with this address.
     internal_name: Internal Name
+    internal_server_error: Internal Server Error
+    internal_server_error_message: The server encountered an internal error and was unable to complete your request.
     internationalization: Internationalization
     invalid_credit_card: Invalid credit card.
     invalid_exchange_variant: Invalid exchange variant.
@@ -1207,6 +1243,7 @@ en:
     items_reimbursed: Items reimbursed
     items_to_be_reimbursed: Items to be reimbursed
     join_slack: Join Slack
+    key: Key
     kind: Kind
     language: Language
     last_name: Last Name
@@ -1262,6 +1299,8 @@ en:
     meta_keywords: Meta Keywords
     meta_title: Meta Title
     metadata: Metadata
+    metafield_definitions: Metafield Definitions
+    metafields: Metafields
     min: Min
     minimal_amount: Minimal Amount
     minimum_password_length:
@@ -1299,7 +1338,7 @@ en:
     new_gift_card: New Gift Card
     new_image: New Image
     new_line_item: Add line item
-    new_market: New market
+    new_metafield_definition: New Metafield Definition
     new_nested_taxon: New nested taxon
     new_option_type: New Option Type
     new_order: New Order
@@ -1309,6 +1348,7 @@ en:
     new_password: New password
     new_payment: New Payment
     new_payment_method: New Payment Method
+    new_policy: New Policy
     new_post: New Post
     new_post_category: New Post Category
     new_product: New Product
@@ -1340,7 +1380,19 @@ en:
     new_tracker: New Tracker
     new_user: New User
     new_variant: New Variant
+    new_webhook_endpoint: New Webhook Endpoint
     new_zone: New Zone
+    newsletter_mailer:
+      email_confirmation:
+        dear_customer: Hey,
+        ignore_disclaimer: If you didn't request this, please ignore this email.
+        instructions: Please click the button below to verify your email address.
+        message_copy_link: 'If the button doesn''t work please copy and paste the following link to your browser:'
+        store_team: "%{store_name} Team"
+        subject: Verify your email address
+        thanks: Thank you
+        verify_email_address_link: Verify email address
+    newsletter_subscribers: Newsletter Subscribers
     newsletters: Newsletters
     next: Next
     no_actions_added: No actions added
@@ -1359,6 +1411,7 @@ en:
       oops: Oops!
     no_products_added: No products added
     no_products_found: No products found
+    no_report_data: No report data
     no_resource_found: No %{resource} found
     no_results: No results
     no_returns_found: No returns found
@@ -1493,6 +1546,7 @@ en:
         buy_buttons:
           display_name: Add To Cart
     page_not_found: Sorry! Page you are looking can’t be found.
+    page_not_found_message: This page just doesn't exist.
     page_sections:
       announcement_bar:
         default_text: Welcome to my Store!
@@ -1574,6 +1628,7 @@ en:
     payment_updated: Payment Updated
     payments: Payments
     payments_count: Payments count
+    payments_gateway_processing_errors: "%{payment_method_name} processing errors"
     pending: Pending
     pending_sale: Pending Sale
     percent: Percent
@@ -1777,6 +1832,7 @@ en:
     resellable: Resellable
     resend: Resend
     reset_password: Reset my password
+    resource: Resource
     response_code: Response Code
     restore_defaults: Restore defaults
     resume: resume
@@ -1811,6 +1867,7 @@ en:
     rma_value: RMA Value
     role_id: Role ID
     roles: Roles
+    row: Row
     rules: Rules
     safe: Safe
     sale: Sale
@@ -1854,6 +1911,7 @@ en:
     select_stock: Select stock
     select_stores: Select Store(s)
     select_user: Select customer
+    select_vendor: Select vendor
     selected_quantity_not_available: selected of %{item} is not available.
     send_consumer_transactional_emails: Send Customer Transactional Emails
     send_copy_of_all_mails_to: Send Copy of All Mails To
@@ -1867,6 +1925,8 @@ en:
     seo_title: SEO Title
     server: Server
     server_error: The server returned an error
+    service_unavailable: Service Unavailable
+    service_unavailable_message: The server is temporarily unable to service your request due to maintenance downtime or capacity problems. Please try again later.
     settings: Settings
     ship: Ship
     ship_address: Ship Address
@@ -2203,6 +2263,8 @@ en:
       metric: metric
       metric_system: Metric system
     unlock: Unlock
+    unprocessable_entity: Unprocessable Entity
+    unprocessable_entity_message: Your request could not be processed. Please check the form for errors and try again.
     unrecognized_card_type: Unrecognized card type
     unshippable_items: Unshippable Items
     update: Update
@@ -2244,6 +2306,8 @@ en:
     variants_count: Variants count
     vendor: Vendor
     vendors: Vendors
+    verified: Verified
+    verified_at: Verified at
     version: Version
     view: View
     view_all: View all
@@ -2256,6 +2320,7 @@ en:
     we_are_busy_updating: We're updating the %{store_name} homepage.
     we_are_busy_updating_page: We're busy updating this page.
     we_will_be_back: We will be back.
+    webhook_endpoints: Webhook Endpoints
     webhooks: Webhooks
     weight: Weight
     weight_unit: Weight unit

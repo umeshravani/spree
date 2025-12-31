@@ -15,14 +15,6 @@ describe Spree::Api::V2::Platform::ResourceController, type: :controller do
   describe '#resource_serializer' do
     subject { dummy_controller.send(:resource_serializer) }
 
-    context 'when controller model class is nested more than 2 levels' do
-      before do
-        allow(dummy_controller).to receive(:model_class).and_return(Spree::Webhooks::Subscriber)
-      end
-
-      it { expect(subject).to eq(Spree::Api::V2::Platform::Webhooks::SubscriberSerializer) }
-    end
-
     it { expect(subject).to be Spree::Api::V2::Platform::ProductSerializer }
   end
 
@@ -63,5 +55,24 @@ describe Spree::Api::V2::Platform::ResourceController, type: :controller do
     end
 
     it { expect(dummy_controller.send(:permitted_resource_params)).to eq(ActionController::Parameters.new(valid_attributes).require(:product).permit!) }
+
+    context 'when model supports metafields' do
+      before do
+        allow(dummy_controller).to receive(:model_class).and_return(Spree::Product)
+      end
+
+      let!(:metafield_definition) { create(:metafield_definition, :short_text_field, resource_type: Spree::Product) }
+
+      let(:valid_attributes) do
+        {
+          product: {
+            name: 'Test',
+            metafields_attributes: [{ metafield_definition_id: metafield_definition.id, value: 'Test' }]
+          }
+        }
+      end
+
+      it { expect(dummy_controller.send(:permitted_resource_params)).to include(:metafields_attributes) }
+    end
   end
 end

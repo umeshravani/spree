@@ -1,6 +1,8 @@
 require 'spec_helper'
 
 describe Spree::Payment, type: :model do
+  it_behaves_like 'lifecycle events'
+
   let(:store) { @default_store }
   let(:order) { create(:order, store: store, total: 200) }
   let(:refund_reason) { create(:refund_reason) }
@@ -465,6 +467,67 @@ describe Spree::Payment, type: :model do
       end
     end
 
+    describe '#confirm!' do
+      subject(:confirm!) { payment.confirm! }
+
+      before do
+        gateway.update!(auto_capture: auto_capture)
+      end
+
+      context 'for automatically captured payments' do
+        let(:auto_capture) { true }
+
+        it 'makes the payment complete' do
+          confirm!
+          expect(payment.reload).to be_completed
+        end
+
+        it 'logs a capture event' do
+          confirm!
+
+          expect(payment.reload.capture_events.count).to eq(1)
+          expect(payment.capture_events.first.amount).to eq(payment.amount)
+        end
+
+        context 'when payment is already completed' do
+          before do
+            payment.complete!
+            payment.capture_events.create!(amount: payment.amount)
+          end
+
+          it 'keeps the payment completed' do
+            confirm!
+            expect(payment.reload).to be_completed
+          end
+
+          it 'does not log a duplicated capture event' do
+            expect { confirm! }.not_to change(Spree::PaymentCaptureEvent, :count)
+            expect(payment.reload.capture_events.count).to eq(1)
+          end
+        end
+      end
+
+      context 'for manually captured payments' do
+        let(:auto_capture) { false }
+
+        it 'makes the payment pending' do
+          confirm!
+          expect(payment.reload).to be_pending
+        end
+
+        context 'when payment is already pending' do
+          before do
+            payment.pend!
+          end
+
+          it 'keeps the payment pending' do
+            confirm!
+            expect(payment.reload).to be_pending
+          end
+        end
+      end
+    end
+
     describe '#capture!' do
       context 'when payment is pending' do
         before do
@@ -593,7 +656,7 @@ describe Spree::Payment, type: :model do
           # Change it to something different
           payment.response_code = 'abc'
           payment.void_transaction!
-          expect(payment.response_code).to eq('12345')
+          expect(payment.response_code).to eq('void-12345')
         end
       end
 
@@ -1190,6 +1253,69 @@ describe Spree::Payment, type: :model do
 
       it 'returns the url' do
         expect(payment.gateway_dashboard_payment_url).to eq("https://dashboard.stripe.com/payments/#{payment.transaction_id}")
+      end
+    end
+  end
+
+  describe '#add_gateway_processing_error' do
+    subject { payment.add_gateway_processing_error('Insufficient balance on payment') }
+
+    it 'adds a gateway processing error' do
+      subject
+      expect(payment.get_metafield('gateway.processing_errors').value).to eq([{ message: 'Insufficient balance on payment' }].to_json)
+    end
+
+    context 'when the metafield already exists' do
+      before do
+        payment.set_metafield('gateway.processing_errors', [{ message: 'Gateway processing error' }].to_json)
+      end
+
+      it 'adds a gateway processing error' do
+        subject
+
+        expect(payment.get_metafield('gateway.processing_errors').value).to eq(
+          [
+            { message: 'Gateway processing error' },
+            { message: 'Insufficient balance on payment' }
+          ].to_json
+        )
+      end
+    end
+  end
+
+  describe '#gateway_processing_error_messages' do
+    before do
+      payment.add_gateway_processing_error('Gateway processing error')
+      payment.add_gateway_processing_error('Another gateway processing error')
+    end
+
+    it 'returns the gateway processing error messages' do
+      expect(payment.gateway_processing_error_messages).to eq(['Gateway processing error', 'Another gateway processing error'])
+    end
+  end
+
+  describe 'events' do
+    describe 'completed state transition' do
+      it 'publishes payment.completed event' do
+        payment.started_processing!
+        expect(payment).to receive(:publish_event).with('payment.completed')
+        allow(payment).to receive(:publish_event).with(anything)
+
+        payment.complete!
+      end
+    end
+
+    describe 'voided state transition' do
+      before do
+        payment.started_processing!
+        payment.pend!
+      end
+
+      it 'publishes payment.voided event' do
+        expect(payment).to receive(:publish_event).with('payment.voided')
+        allow(payment).to receive(:publish_event).with(anything)
+
+        payment.void!
       end
     end
   end

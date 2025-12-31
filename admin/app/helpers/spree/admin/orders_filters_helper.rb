@@ -2,6 +2,8 @@ module Spree
   module Admin
     module OrdersFiltersHelper
       def params_to_filters(search_params:, vendor: nil, user: nil)
+        return if search_params.blank?
+
         if search_params.is_a?(String)
           search_params = JSON.parse(search_params).deep_symbolize_keys
         end
@@ -15,7 +17,7 @@ module Spree
         if search_params[:created_at_gt].present?
           search_params[:created_at_gt] = begin
             # Firstly we parse to date to avoid issues with timezones because frontend sends time in local timezone
-            search_params[:created_at_gt].to_date&.in_time_zone(current_timezone)
+            search_params[:created_at_gt].to_date&.in_time_zone(current_timezone)&.beginning_of_day
           rescue StandardError
             ''
           end
@@ -31,7 +33,7 @@ module Spree
 
         if search_params[:completed_at_gt].present?
           search_params[:completed_at_gt] = begin
-            search_params[:completed_at_gt].to_date&.in_time_zone(current_timezone)
+            search_params[:completed_at_gt].to_date&.in_time_zone(current_timezone)&.beginning_of_day
           rescue StandardError
             ''
           end
@@ -68,6 +70,7 @@ module Spree
         # e.g. SELECT  DISTINCT DISTINCT "spree_orders".id, "spree_orders"."created_at" AS alias_0 FROM "spree_orders"
         # see https://github.com/spree/spree/pull/3919
         @orders = @search.result(distinct: true).page(params[:page]).per(params[:per_page] || Spree::Admin::RuntimeConfig.admin_orders_per_page)
+        @collection = @orders
       end
 
       def load_user

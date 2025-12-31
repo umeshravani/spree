@@ -7,13 +7,13 @@ describe Spree::PaymentMethod, type: :model do
 
   # register test gateways
   before do
-    Rails.application.config.spree.payment_methods << TestGateway
-    Rails.application.config.spree.payment_methods << Spree::Gateway::Test
+    Spree.payment_methods << TestGateway
+    Spree.payment_methods << Spree::Gateway::Test
   end
 
   context 'visibility scopes' do
     before do
-      [nil, '', 'both', 'front_end', 'back_end'].each do |display_on|
+      ['both', 'front_end', 'back_end'].each do |display_on|
         Spree::Gateway::Test.create(
           name: 'Display Both',
           display_on: display_on,
@@ -25,7 +25,7 @@ describe Spree::PaymentMethod, type: :model do
     end
 
     it 'has 5 total methods' do
-      expect(Spree::PaymentMethod.count).to eq(5)
+      expect(Spree::PaymentMethod.count).to eq(3)
     end
 
     describe '#available' do
@@ -63,7 +63,7 @@ describe Spree::PaymentMethod, type: :model do
         )
         methods = Spree::PaymentMethod.for_store(store)
         expect(methods).not_to include(method_from_other_store)
-        expect(methods.size).to eq(5)
+        expect(methods.size).to eq(3)
       end
     end
   end
@@ -183,5 +183,19 @@ describe Spree::PaymentMethod, type: :model do
 
   describe '#payment_icon_name' do
     it { expect(build(:credit_card_payment_method, type: 'Spree::Gateway::AuthorizeNetGateway').payment_icon_name).to eq('authorizenet') }
+  end
+
+  context 'when payment method is destroyed' do
+    let(:payment_method) { create(:credit_card_payment_method) }
+    let!(:payment) { create(:payment, payment_method: payment_method, source: credit_card) }
+    let!(:credit_card) { create(:credit_card, payment_method: payment_method) }
+    let!(:gateway_customer) { create(:gateway_customer, payment_method: payment_method) }
+
+    it 'destroys the payment method' do
+      expect { payment_method.destroy }.to change(Spree::PaymentMethod, :count).by(-1).and change(Spree::CreditCard, :count).by(-1).and change(Spree::GatewayCustomer, :count).by(-1)
+      expect(payment.reload.payment_method).to be_nil
+      expect(credit_card.reload.payment_method).to be_nil
+      expect(credit_card.reload.deleted_at).not_to be_nil
+    end
   end
 end

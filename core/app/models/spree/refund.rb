@@ -1,9 +1,7 @@
 module Spree
   class Refund < Spree.base_class
+    include Spree::Metafields
     include Spree::Metadata
-    if defined?(Spree::Webhooks::HasWebhooks)
-      include Spree::Webhooks::HasWebhooks
-    end
     if defined?(Spree::Security::Refunds)
       include Spree::Security::Refunds
     end
@@ -13,7 +11,7 @@ module Spree
       belongs_to :reimbursement, optional: true
     end
     belongs_to :reason, class_name: 'Spree::RefundReason', foreign_key: :refund_reason_id
-    belongs_to :refunder, class_name: "::#{Spree.admin_user_class}", optional: true
+    belongs_to :refunder, class_name: Spree.admin_user_class.to_s, optional: true
 
     has_many :log_entries, as: :source
 

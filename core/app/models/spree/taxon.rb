@@ -16,11 +16,9 @@ module Spree
 
     include Spree::TranslatableResource
     include Spree::TranslatableResourceSlug
+    include Spree::Metafields
     include Spree::Metadata
     include Spree::MemoizedData
-    if defined?(Spree::Webhooks::HasWebhooks)
-      include Spree::Webhooks::HasWebhooks
-    end
 
     MEMOIZED_METHODS = %w[cached_self_and_descendants_ids].freeze
 
@@ -45,8 +43,6 @@ module Spree
 
     has_many :promotion_rule_taxons, class_name: 'Spree::PromotionRuleTaxon', dependent: :destroy
     has_many :promotion_rules, through: :promotion_rule_taxons, class_name: 'Spree::PromotionRule'
-
-    has_many :page_links, as: :linkable, class_name: 'Spree::PageLink', dependent: :destroy
 
     #
     # Attachments
@@ -85,10 +81,6 @@ module Spree
     after_move :regenerate_pretty_name_and_permalink
     after_move :regenerate_translations_pretty_name_and_permalink
 
-    after_commit :touch_featured_sections, on: [:update]
-    after_touch :touch_featured_sections
-    after_destroy :remove_featured_sections, if: -> { featured? }
-
     #
     # Scopes
     #
@@ -115,6 +107,16 @@ module Spree
     else
       def self.search_by_name(query)
         i18n { name.lower.matches("%#{query.downcase}%") }
+      end
+    end
+
+    scope :with_matching_name, ->(name_to_match) do
+      value = name_to_match.to_s.strip.downcase
+
+      if Spree.use_translations?
+        i18n { name.lower.eq(value) }
+      else
+        where(arel_table[:name].lower.eq(value))
       end
     end
 
@@ -155,10 +157,6 @@ module Spree
 
     def manual_sort_order?
       sort_order == 'manual'
-    end
-
-    def page_builder_image
-      square_image.presence || image
     end
 
     def active_products_with_descendants
@@ -314,6 +312,7 @@ module Spree
     # indicate which filters should be used for a taxon
     # this method should be customized to your own site
     def applicable_filters
+      Spree::Deprecation.warn('applicable_filters is deprecated and will be removed in Spree 6.0')
       fs = []
       # fs << ProductFilters.taxons_below(self)
       ## unless it's a root taxon? left open for demo purposes
@@ -390,20 +389,6 @@ module Spree
       move_to_child_with_index(parent, idx.to_i) unless new_record?
     end
 
-    def page_builder_url
-      return unless Spree::Core::Engine.routes.url_helpers.respond_to?(:nested_taxons_path)
-
-      Spree::Core::Engine.routes.url_helpers.nested_taxons_path(self)
-    end
-
-    def featured?
-      featured_sections.any?
-    end
-
-    def featured_sections
-      @featured_sections ||= Spree::PageSections::FeaturedTaxon.published.by_taxon_id(id)
-    end
-
     private
 
     def should_regenerate_pretty_name_and_permalink?
@@ -443,14 +428,6 @@ module Spree
 
     def regenerate_translations_pretty_name_and_permalink
       translations.each(&:regenerate_pretty_name_and_permalink)
-    end
-
-    def touch_featured_sections
-      Spree::Taxons::TouchFeaturedSections.call(taxon_ids: [id])
-    end
-
-    def remove_featured_sections
-      featured_sections.destroy_all
     end
   end
 end

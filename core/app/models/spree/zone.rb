@@ -1,9 +1,6 @@
 module Spree
   class Zone < Spree.base_class
     include Spree::UniqueName
-    if defined?(Spree::Webhooks::HasWebhooks)
-      include Spree::Webhooks::HasWebhooks
-    end
 
     with_options dependent: :destroy, inverse_of: :zone do
       has_many :zone_members, class_name: 'Spree::ZoneMember'
@@ -21,6 +18,7 @@ module Spree
 
     after_save :remove_defunct_members
     after_save :remove_previous_default, if: %i[default_tax? saved_change_to_default_tax?]
+    before_destroy :nullify_checkout_zone
 
     alias members zone_members
     accepts_nested_attributes_for :zone_members, allow_destroy: true, reject_if: proc { |a| a['zoneable_id'].blank? }
@@ -203,6 +201,12 @@ module Spree
         member.zoneable_type = type
         member.zoneable_id = id
         members << member
+      end
+    end
+
+    def nullify_checkout_zone
+      if id == Spree::Store.current.checkout_zone_id
+        Spree::Store.current.update(checkout_zone_id: nil)
       end
     end
   end

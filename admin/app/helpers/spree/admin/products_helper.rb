@@ -11,7 +11,7 @@ module Spree
 
       def display_inventory(product_or_variant)
         if product_or_variant.total_on_hand == BigDecimal::INFINITY
-          content_tag :span, class: 'text-muted' do
+          content_tag :span, class: 'text-gray-600' do
             Spree.t('admin.not_tracking_inventory')
           end
         else
@@ -24,18 +24,6 @@ module Spree
             stock += " - #{product_or_variant.variants.size} #{Spree.t(:variants).downcase}"
           end
           stock
-        end
-      end
-
-      # we use this method to fetch images for media gallery on product form
-      # for new products we use session to store temporary assets not tied to any variant/product (yet)
-      def media_form_assets(variant)
-        if variant&.persisted?
-          variant.images
-        elsif session_uploaded_assets.any?
-          Spree::Image.accessible_by(current_ability, :manage).where(id: session_uploaded_assets)
-        else
-          []
         end
       end
 

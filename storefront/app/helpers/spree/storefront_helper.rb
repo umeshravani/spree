@@ -5,13 +5,31 @@ module Spree
     include Spree::ShipmentHelper
     include Heroicon::Engine.helpers
 
+    # Returns the cache key for the storefront including the current wishlist and order.
+    #
+    # @return [Array] The cache key
+    def spree_storefront_base_cache_key
+      @spree_storefront_base_cache_key ||= [
+        spree_base_cache_key,
+        current_wishlist,
+        current_order
+      ].compact
+    end
+
+    # Returns the cache scope for the storefront including the current wishlist and order.
+    #
+    # @return [Proc] The cache scope
+    def spree_storefront_base_cache_scope
+      ->(record = nil) { [*spree_storefront_base_cache_key, record].compact_blank }
+    end
+
     # Renders the storefront partials for the given section.
     #
     # @param section [String] The section to render
     # @param options [Hash] The options/variables to pass to the partials
     # @return [String] The rendered partials
     def render_storefront_partials(section, options = {})
-      Rails.application.config.spree_storefront.send(section).map do |partial|
+      Spree.storefront.partials.send(section.to_s.gsub('_partials', '').to_sym).map do |partial|
         render partial, options
       end.join.html_safe
     end
@@ -67,6 +85,7 @@ module Spree
 
     def svg_country_icon(country_code)
       language_to_country = {
+        'el' => 'gr',
         'en' => 'us',
         'ja' => 'jp',
         'uk' => 'ua'

@@ -1,9 +1,6 @@
 module Spree
   class Price < Spree.base_class
     include Spree::VatPriceCalculation
-    if defined?(Spree::Webhooks::HasWebhooks)
-      include Spree::Webhooks::HasWebhooks
-    end
 
     acts_as_paranoid
 
@@ -66,8 +63,10 @@ module Spree
       Spree::Money.new(compare_at_amount || 0, currency: currency)
     end
 
-    def compare_at_amount=(compare_at_amount)
-      self[:compare_at_amount] = Spree::LocalizedNumber.parse(compare_at_amount)
+    def compare_at_amount=(value)
+      calculated_value = Spree::LocalizedNumber.parse(value) if value.present?
+
+      self[:compare_at_amount] = calculated_value
     end
 
     alias_attribute :price, :amount

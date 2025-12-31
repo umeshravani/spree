@@ -136,6 +136,11 @@ RSpec.describe 'Product detail page', type: :feature do
       it_behaves_like 'can be added to cart'
 
       it 'cannot add more than available quantity', js: true do
+        # Mock store url to match Capybara url for cookie domain
+        allow_any_instance_of(Spree::LineItemsController).to receive(:current_store)
+          .and_return(store)
+        host = Capybara.current_session.server.host
+        allow(store).to receive(:url_or_custom_domain).and_return(host)
         # we need to populate cart first
         within turbo_frame do
           fill_in 'quantity', with: 10
@@ -613,13 +618,11 @@ RSpec.describe 'Product detail page', type: :feature do
   end
 
   it 'shows taxon tree in breadcrumbs' do
-    within turbo_frame do |c|
-      within('nav#breadcrumbs') do
-        expect(c).to have_text('Men')
-        expect(c).to have_text('Clothing')
-        expect(c).to have_text('Shoes')
-        expect(c).to have_text(product.name)
-      end
+    within('nav#breadcrumbs') do
+      expect(page).to have_text('Men')
+      expect(page).to have_text('Clothing')
+      expect(page).to have_text('Shoes')
+      expect(page).to have_text(product.name)
     end
   end
 

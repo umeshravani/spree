@@ -5,6 +5,7 @@ module Spree
     included do
       has_many :adjustments, as: :source
       before_destroy :deals_with_adjustments_for_deleted_source
+      after_commit :clear_adjustment_source_cache
     end
 
     protected
@@ -14,12 +15,12 @@ module Spree
 
       return if amount.zero?
 
-      adjustments.new(
-        adjustable: adjustable,
+      adjustable.adjustments.new(
         amount: amount,
         included: included,
         label: label,
-        order: order
+        order: order,
+        source: self
       ).save
     end
 
@@ -53,6 +54,13 @@ module Spree
       # Therefore we nullify the source_id, leaving the adjustment in place.
       # This would mean that the order's total is not altered at all.
       adjustments.for_complete_order.update_all(source_id: nil, updated_at: Time.current)
+    end
+
+    def clear_adjustment_source_cache
+      # Use base_class.name to match the polymorphic_name stored in source_type
+      # For STI models like PromotionAction subclasses, this ensures cache key consistency
+      cache_class_name = self.class.polymorphic_name
+      Rails.cache.delete("spree/adjustment_source/#{cache_class_name}/#{id}")
     end
   end
 end

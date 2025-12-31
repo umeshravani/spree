@@ -3,11 +3,13 @@ module Spree
     class Orders < Spree::Export
       def scope_includes
         [
+          :store,
           :payments,
           :shipments,
-          { bill_address: :state },
-          { ship_address: :state },
-          { line_items: { variant: { product: [:taxons] } } }
+          { bill_address: [:state, :country] },
+          { ship_address: [:state, :country] },
+          { line_items: { variant: { product: [:taxons] } } },
+          { metafields: :metafield_definition }
         ]
       end
 
@@ -16,7 +18,7 @@ module Spree
       end
 
       def csv_headers
-        Spree::CSV::OrderLineItemPresenter::HEADERS
+        Spree::CSV::OrderLineItemPresenter::HEADERS + metafields_headers
       end
     end
   end

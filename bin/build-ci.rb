@@ -21,8 +21,9 @@ class Project
     @name = name
   end
 
-  ALL = %w[emails api core sample admin storefront].freeze
+  ALL = %w[emails api core sample admin storefront legacy_webhooks page_builder].freeze
   CORE_GEMS = %w[api core].freeze
+  PACKAGES = %w[legacy_webhooks page_builder].freeze
 
   # Install subproject
   #
@@ -73,11 +74,19 @@ class Project
 
   private
 
+  # Configure bundler path
+  #
+  # @return [Boolean]
+  def bundle_config
+    system("bundle config set --local path #{VENDOR_BUNDLE}")
+  end
+
   # Check if current bundle is already usable
   #
   # @return [Boolean]
   def bundle_check
-    system("bundle check --path=#{VENDOR_BUNDLE}")
+    bundle_config
+    system("bundle check")
   end
 
   # Install the current bundle
@@ -85,7 +94,8 @@ class Project
   # @return [Boolean]
   #   the success of the installation
   def bundle_install
-    system("bundle install --path=#{VENDOR_BUNDLE} --jobs=#{BUNDLER_JOBS} --retry=#{BUNDLER_RETRIES}")
+    bundle_config
+    system("bundle install --jobs=#{BUNDLER_JOBS} --retry=#{BUNDLER_RETRIES}")
   end
 
   # Setup the test app
@@ -122,7 +132,11 @@ class Project
   #
   # @return [undefined]
   def chdir(&block)
-    Dir.chdir(ROOT.join(name), &block)
+    if PACKAGES.include?(name)
+      Dir.chdir(ROOT.join('packages', name), &block)
+    else
+      Dir.chdir(ROOT.join(name), &block)
+    end
   end
 
   # Install subprojects

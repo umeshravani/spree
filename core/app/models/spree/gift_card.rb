@@ -2,6 +2,7 @@ module Spree
   class GiftCard < Spree.base_class
     extend DisplayMoney
     include Spree::SingleStoreResource
+    include Spree::Metafields
     include Spree::Security::GiftCards if defined?(Spree::Security::GiftCards)
 
     #
@@ -14,12 +15,16 @@ module Spree
 
       event :redeem do
         transition active: :redeemed
+        transition partially_redeemed: :redeemed
       end
       after_transition to: :redeemed, do: :after_redeem
+      after_transition to: :redeemed, do: :publish_gift_card_redeemed_event
 
       event :partial_redeem do
         transition active: :partially_redeemed
+        transition partially_redeemed: :partially_redeemed
       end
+      after_transition to: :partially_redeemed, do: :publish_gift_card_partially_redeemed_event
     end
 
     #
@@ -151,6 +156,14 @@ module Spree
 
     def after_redeem
       update!(redeemed_at: Time.current)
+    end
+
+    def publish_gift_card_redeemed_event
+      publish_event('gift_card.redeemed')
+    end
+
+    def publish_gift_card_partially_redeemed_event
+      publish_event('gift_card.partially_redeemed')
     end
 
     def ensure_can_be_deleted

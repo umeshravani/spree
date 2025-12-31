@@ -35,6 +35,7 @@ end
 require 'rspec/rails'
 require 'database_cleaner/active_record'
 require 'ffaker'
+require 'shoulda-matchers'
 
 Dir['./spec/support/**/*.rb'].sort.each { |f| require f }
 
@@ -44,6 +45,7 @@ require 'spree/testing_support/factories'
 require 'spree/testing_support/jobs'
 require 'spree/testing_support/store'
 require 'spree/testing_support/metadata'
+require 'spree/testing_support/lifecycle_events'
 require 'spree/testing_support/preferences'
 require 'spree/testing_support/url_helpers'
 require 'spree/testing_support/kernel'
@@ -76,7 +78,6 @@ RSpec.configure do |config|
   end
 
   config.before(:each) do
-    Spree::Webhooks.disabled = true
     reset_spree_preferences
   end
 
@@ -86,4 +87,11 @@ RSpec.configure do |config|
 
   config.order = :random
   Kernel.srand config.seed
+end
+
+Shoulda::Matchers.configure do |config|
+  config.integrate do |with|
+    with.test_framework :rspec
+    with.library :rails
+  end
 end

@@ -2,16 +2,17 @@ module Spree
   class ShippingMethod < Spree.base_class
     acts_as_paranoid
     include Spree::CalculatedAdjustments
+    include Spree::Metafields
     include Spree::Metadata
     include Spree::DisplayOn
-    if defined?(Spree::Webhooks::HasWebhooks)
-      include Spree::Webhooks::HasWebhooks
-    end
     if defined?(Spree::VendorConcern)
       include Spree::VendorConcern
     end
+    include Spree::MemoizedData
 
     extend Spree::DisplayMoney
+
+    MEMOIZED_METHODS = %w[display_estimated_price digital?]
 
     # Used for #refresh_rates
     DISPLAY_ON_FRONT_END = 1
@@ -73,7 +74,7 @@ module Spree
 
     # your shipping method subclasses can override this method to provide a custom tracking number service
     def tracking_number_service(tracking)
-      @tracking_number_service ||= Spree::Dependencies.tracking_number_service.constantize.new(tracking)
+      @tracking_number_service ||= Spree.tracking_number_service.new(tracking)
     end
 
     def self.calculators
@@ -116,6 +117,13 @@ module Spree
           ''
         end
       end
+    end
+
+    # Returns true if the shipping method is digital
+    #
+    # @return [Boolean]
+    def digital?
+      @digital ||= calculator.is_a?(Spree::Calculator::Shipping::DigitalDelivery)
     end
 
     private

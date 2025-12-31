@@ -28,7 +28,8 @@ module Spree
 
     helper_method :permitted_products_params, :products_filters_params,
                   :storefront_products_scope, :storefront_products,
-                  :default_products_sort, :default_products_finder_params
+                  :default_products_sort, :default_products_finder_params,
+                  :storefront_products_includes, :storefront_products_finder
 
     helper_method :stored_location
 
@@ -39,7 +40,7 @@ module Spree
     def render_404_if_store_not_exists
       return if current_store.present?
 
-      render 'errors/404', layout: 'application', status: :not_found
+      render 'spree/errors/404', layout: 'application', status: :not_found
     end
 
     def current_taxon
@@ -114,12 +115,16 @@ module Spree
     end
 
     def default_title
-      @default_title ||= current_store.name
+      @default_title ||= current_store.seo_title.presence || current_store.name
     end
 
     # this is a hook for subclasses to provide title
     def accurate_title
       @accurate_title ||= current_store.seo_title.presence || current_store.name
+    end
+
+    def storefront_products_finder
+      @storefront_products_finder ||= Spree.products_finder
     end
 
     def storefront_products_scope
@@ -155,7 +160,7 @@ module Spree
         finder_params = default_products_finder_params
         finder_params[:sort_by] ||= @taxon&.sort_order || 'manual'
 
-        products_finder = Spree::Dependencies.products_finder.constantize
+        products_finder = storefront_products_finder
         products = products_finder.
                    new(scope: storefront_products_scope, params: finder_params).
                    execute.

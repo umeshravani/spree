@@ -1,9 +1,7 @@
 module Spree
   class LineItem < Spree.base_class
+    include Spree::Metafields
     include Spree::Metadata
-    if defined?(Spree::Webhooks::HasWebhooks)
-      include Spree::Webhooks::HasWebhooks
-    end
 
     attribute :quantity, :integer, default: 1
 
@@ -18,7 +16,7 @@ module Spree
     has_one :product, -> { with_deleted }, class_name: 'Spree::Product', through: :variant
 
     has_many :adjustments, as: :adjustable, dependent: :destroy
-    has_many :inventory_units, inverse_of: :line_item
+    has_many :inventory_units, class_name: 'Spree::InventoryUnit', inverse_of: :line_item, dependent: :destroy
     has_many :shipments, through: :inventory_units, source: :shipment
     has_many :digital_links, dependent: :destroy
 
@@ -41,8 +39,6 @@ module Spree
 
     before_destroy :verify_order_inventory_before_destroy, if: -> { order.has_checkout_step?('delivery') }
 
-    before_destroy :destroy_inventory_units
-
     after_save :update_inventory
     after_save :update_adjustments
 
@@ -51,7 +47,7 @@ module Spree
     delegate :name, :description, :sku, :should_track_inventory?, :product, :options_text, :slug, :product_id, :dimensions_unit, :weight_unit, to: :variant
     delegate :brand, :category, to: :product
     delegate :tax_zone, to: :order
-    delegate :digital?, to: :variant
+    delegate :digital?, :can_supply?, to: :variant
 
     scope :with_digital_assets, -> { joins(:variant).merge(Spree::Variant.with_digital_assets) }
 
@@ -68,7 +64,7 @@ module Spree
       if variant
         update_price if price.nil?
         self.cost_price = variant.cost_price if cost_price.nil?
-        self.currency = variant.currency if currency.nil?
+        self.currency = order.currency if currency.nil?
       end
     end
 
@@ -83,12 +79,18 @@ module Spree
     end
 
     extend DisplayMoney
-    money_methods :amount, :subtotal, :discounted_amount, :final_amount, :total, :price,
+    money_methods :amount, :subtotal, :discounted_amount, :final_amount, :total, :price, :discounted_price,
                   :adjustment_total, :additional_tax_total, :promo_total, :included_tax_total,
                   :pre_tax_amount, :shipping_cost, :tax_total, :compare_at_amount
 
     alias single_money display_price
     alias single_display_amount display_price
+
+    def discounted_price
+      return price if quantity.zero?
+
+      price - (promo_total.abs / quantity)
+    end
 
     def amount
       price * quantity
@@ -129,7 +131,7 @@ module Spree
     alias money display_total
 
     def sufficient_stock?
-      Spree::Stock::Quantifier.new(variant).can_supply? quantity
+      can_supply? quantity
     end
 
     def insufficient_stock?
@@ -158,16 +160,22 @@ module Spree
         # Skip cancelled shipments
         return BigDecimal('0') if shipment.canceled?
 
-        # Get all inventory units in this shipment for this line item
-        line_item_units = shipment.inventory_units.where(line_item_id: id).count
+        # Skip shipments with no cost/zero cost
+        return BigDecimal('0') if shipment.cost.zero?
 
         # Get total inventory units in this shipment
-        total_units = shipment.inventory_units.count
+        total_units = shipment.inventory_units
 
         # Calculate proportional shipping cost
-        return BigDecimal('0') if total_units.zero? || line_item_units.zero? || shipment.cost.zero?
+        return BigDecimal('0') if total_units.empty?
 
-        shipment.cost * (line_item_units.to_d / total_units)
+        # Get all inventory units in this shipment for this line item
+        line_item_units = shipment.inventory_units.find_all { |unit| unit.line_item_id == id }.count
+
+        # Calculate proportional shipping cost
+        return BigDecimal('0') if line_item_units.zero?
+
+        shipment.cost * (line_item_units.to_d / total_units.count)
       end
     end
 
@@ -224,10 +232,6 @@ module Spree
 
     def verify_order_inventory_before_destroy
       Spree::OrderInventory.new(order, self).verify(target_shipment)
-    end
-
-    def destroy_inventory_units
-      throw(:abort) unless inventory_units.destroy_all
     end
 
     def update_adjustments

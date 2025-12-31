@@ -5,6 +5,7 @@ module Spree
     include Spree::Core::NumberGenerator.new(prefix: 'H', length: 11)
     include Spree::NumberIdentifier
     include Spree::NumberAsParam
+    include Spree::Metafields
     include Spree::Metadata
     if defined?(Spree::Security::Shipments)
       include Spree::Security::Shipments
@@ -14,6 +15,7 @@ module Spree
     end
     include Spree::Shipment::Emails
     include Spree::Shipment::Webhooks
+    include Spree::Shipment::CustomEvents
 
     with_options inverse_of: :shipments do
       belongs_to :address, class_name: 'Spree::Address'
@@ -81,12 +83,12 @@ module Spree
       event :ship do
         transition from: %i(ready canceled), to: :shipped
       end
-      after_transition to: :shipped, do: [:after_ship, :send_shipment_shipped_webhook]
+      after_transition to: :shipped, do: [:after_ship, :send_shipment_shipped_webhook, :publish_shipment_shipped_event]
 
       event :cancel do
         transition to: :canceled, from: %i(pending ready)
       end
-      after_transition to: :canceled, do: :after_cancel
+      after_transition to: :canceled, do: [:after_cancel, :publish_shipment_canceled_event]
 
       event :resume do
         transition from: :canceled, to: :ready, if: lambda { |shipment|
@@ -94,7 +96,7 @@ module Spree
         }
         transition from: :canceled, to: :pending
       end
-      after_transition from: :canceled, to: %i(pending ready shipped), do: :after_resume
+      after_transition from: :canceled, to: %i(pending ready shipped), do: [:after_resume, :publish_shipment_resumed_event]
 
       after_transition do |shipment, transition|
         shipment.state_changes.create!(
@@ -122,6 +124,10 @@ module Spree
 
     def amount
       cost
+    end
+
+    def digital?
+      shipping_method&.digital? || false
     end
 
     def add_shipping_method(shipping_method, selected = false)
@@ -200,8 +206,12 @@ module Spree
       with_free_shipping_promotion?
     end
 
+    # Returns true if the shipment has a free shipping promotion applied
+    #
+    # @return [Boolean]
     def with_free_shipping_promotion?
-      adjustments.promotion.any? { |p| p.source.type == 'Spree::Promotion::Actions::FreeShipping' }
+      adjustments.promotion.joins("INNER JOIN #{Spree::PromotionAction.table_name} ON #{Spree::PromotionAction.table_name}.id = #{Spree::Adjustment.table_name}.source_id").
+        where("#{Spree::PromotionAction.table_name}.type = 'Spree::Promotion::Actions::FreeShipping'").exists?
     end
 
     def finalize!
@@ -249,10 +259,6 @@ module Spree
 
     def line_items
       inventory_units.includes(:line_item).map(&:line_item).uniq
-    end
-
-    def digital?
-      shipping_method&.calculator&.is_a?(Spree::Calculator::Shipping::DigitalDelivery)
     end
 
     ManifestItem = Struct.new(:line_item, :variant, :quantity, :states)
@@ -358,12 +364,25 @@ module Spree
       self.shipped_at = Time.current
     end
 
+    # Returns the shipping method of the selected shipping rate
+    #
+    # @return [Spree::ShippingMethod]
     def shipping_method
       selected_shipping_rate&.shipping_method || shipping_rates.first&.shipping_method
     end
 
+    # Returns the tax category of the selected shipping rate
+    #
+    # @return [Spree::TaxCategory]
     def tax_category
       selected_shipping_rate.try(:tax_rate).try(:tax_category)
+    end
+
+    # Returns the tax category ID of the selected shipping rate
+    #
+    # @return [Integer]
+    def tax_category_id
+      selected_shipping_rate.try(:tax_rate).try(:tax_category_id)
     end
 
     # Only one of either included_tax_total or additional_tax_total is set
@@ -436,6 +455,9 @@ module Spree
     def after_ship
       ShipmentHandler.factory(self).perform
     end
+
+    # publish_shipment_shipped_event, publish_shipment_canceled_event, and
+    # publish_shipment_resumed_event are defined in Spree::Shipment::CustomEvents
 
     def can_get_rates?
       return true unless order.requires_ship_address?

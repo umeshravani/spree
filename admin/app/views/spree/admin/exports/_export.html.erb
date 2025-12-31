@@ -19,7 +19,7 @@
     <% end %>
   </td>
 
-  <td class="w-25">
+  <td class="w-1/4">
     <% if export.user %>
       <span>
         <%= export.user.name %>
@@ -29,7 +29,7 @@
   <td>
     <%= export.attachment.filename if export.done? %>
   </td>
-  <td class="w-15"><%= spree_time_ago(export.created_at, class: 'with-tip') %></td>
+  <td class="w-15"><%= spree_time_ago(export.created_at) %></td>
   <td>
     <%= number_to_human_size(export.attachment.byte_size) if export.done? %>
   </td>

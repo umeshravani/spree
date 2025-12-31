@@ -4,6 +4,7 @@ module Spree
     acts_as_list scope: :product
 
     include Spree::MemoizedData
+    include Spree::Metafields
     include Spree::Metadata
     include Spree::Variant::Webhooks
 
@@ -223,12 +224,24 @@ module Spree
       self.class.in_stock_or_backorderable.exists?(id: id)
     end
 
+    # Returns tax category for Variant
+    # @return [Spree::TaxCategory]
     def tax_category
       @tax_category ||= if self[:tax_category_id].nil?
                           product.tax_category
                         else
                           Spree::TaxCategory.find_by(id: self[:tax_category_id]) || product.tax_category
                         end
+    end
+
+    # Returns tax category ID for Variant
+    # @return [Integer]
+    def tax_category_id
+      @tax_category_id ||= if self[:tax_category_id].nil?
+                             product.tax_category_id
+                           else
+                             self[:tax_category_id]
+                           end
     end
 
     def options_text
@@ -254,7 +267,7 @@ module Spree
     # Returns default Image for Variant
     # @return [Spree::Image]
     def default_image
-      @default_image ||= if images.size.positive?
+      @default_image ||= if images.any?
                            images.first
                          else
                            product.default_image
@@ -381,6 +394,21 @@ module Spree
       price_in(currency).try(:compare_at_amount)
     end
 
+    def set_price(currency, amount, compare_at_amount = nil)
+      price = prices.find_or_initialize_by(currency: currency)
+      price.amount = amount
+      price.compare_at_amount = compare_at_amount if compare_at_amount.present?
+      price.save!
+    end
+
+    def set_stock(count_on_hand, backorderable = nil, stock_location = nil)
+      stock_location ||= Spree::Store.current.default_stock_location
+      stock_item = stock_items.find_or_initialize_by(stock_location: stock_location)
+      stock_item.count_on_hand = count_on_hand
+      stock_item.backorderable = backorderable if backorderable.present?
+      stock_item.save!
+    end
+
     def price_modifier_amount_in(currency, options = {})
       return 0 unless options.present?
 
@@ -480,6 +508,8 @@ module Spree
     end
 
     # Is this variant purely digital? (no physical product)
+    #
+    # @return [Boolean]
     def digital?
       product.digital?
     end

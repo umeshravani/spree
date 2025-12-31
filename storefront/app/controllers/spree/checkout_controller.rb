@@ -171,7 +171,7 @@ module Spree
           clear_order_token
           flash[:error] = 'You cannot access this checkout'
           redirect_to_cart
-        elsif try_spree_current_user.nil? && !@order.completed?
+        elsif try_spree_current_user.nil? && !allow_access_to_complete_order_with_new_user?
           if params[:guest] && current_store.prefers_guest_checkout?
             @order = current_store.
                        orders.
@@ -182,7 +182,7 @@ module Spree
             end
 
             reset_session
-            cookies.permanent.signed[:token] = @order.token
+            create_token_cookie(@order.token)
 
             redirect_to spree.checkout_path(@order.token)
           else
@@ -196,11 +196,23 @@ module Spree
 
       # completed orders shouldn't be updated anymore
       unless @order.completed?
-        @order.assign_attributes(order_tracking_params)
-        @order.update_columns(order_tracking_params)
+        tracking_params = order_tracking_params
+        changed_params = tracking_params.reject { |key, value| @order.public_send(key) == value }
+
+        if changed_params.any?
+          @order.assign_attributes(changed_params)
+          @order.update_columns(changed_params)
+        end
+
         @order.associate_user!(try_spree_current_user) if try_spree_current_user && @order.user.nil?
       end
       @current_order = @order # for compatibility with the rest of storefront, analytics, etc
+    end
+
+    def allow_access_to_complete_order_with_new_user?
+      cookies_order_token = cookies.signed[:token]
+
+      @order.completed? && @order.signup_for_an_account? && @order.user_id.present? && cookies_order_token.present? && cookies_order_token == @order.token
     end
 
     def remove_out_of_stock_items
@@ -336,7 +348,7 @@ module Spree
         packages = @order.shipments.map(&:to_package)
         @differentiator = Spree::Stock::Differentiator.new(@order, packages)
         @differentiator.missing.each do |variant, quantity|
-          Spree::Dependencies.cart_remove_item_service.constantize.call(order: @order, variant: variant, quantity: quantity)
+          Spree.cart_remove_item_service.call(order: @order, variant: variant, quantity: quantity)
         end
       end
     end
@@ -359,19 +371,19 @@ module Spree
     end
 
     def add_store_credit_service
-      Spree::Dependencies.checkout_add_store_credit_service.constantize
+      Spree.checkout_add_store_credit_service
     end
 
     def remove_store_credit_service
-      Spree::Dependencies.checkout_remove_store_credit_service.constantize
+      Spree.checkout_remove_store_credit_service
     end
 
     def remove_line_item_service
-      Spree::Dependencies.cart_remove_line_item_service.constantize
+      Spree.cart_remove_line_item_service
     end
 
     def coupon_handler
-      Spree::Dependencies.coupon_handler.constantize
+      Spree.coupon_handler
     end
 
     def accurate_title
@@ -381,7 +393,7 @@ module Spree
     def remove_expired_gift_card
       return unless @order.gift_card.present? && @order.gift_card.expired?
 
-      Spree::Dependencies.gift_card_remove_service.constantize.call(order: @order)
+      Spree.gift_card_remove_service.call(order: @order)
     end
   end
 end

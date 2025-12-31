@@ -54,7 +54,7 @@ Spree::Core::Engine.add_routes do
 
     # orders
     resources :checkouts, only: %i[index]
-    resources :orders, only: [:index, :edit, :create, :destroy] do
+    resources :orders, only: [:index, :edit, :new, :create, :destroy] do
       member do
         post :resend
         put :cancel
@@ -105,7 +105,7 @@ Spree::Core::Engine.add_routes do
         post :bulk_remove_tags
       end
     end
-
+    resources :newsletter_subscribers, only: [:index, :destroy]
     resources :addresses, except: [:index, :show]
 
     # promotions
@@ -136,6 +136,23 @@ Spree::Core::Engine.add_routes do
     # translations
     resources :translations, only: [:edit, :update], path: '/translations/:resource_type'
 
+    # metafields
+    resources :metafields, only: [:edit, :update], path: '/metafields/:resource_type'
+    resources :metafield_definitions, except: :show
+
+    # json preview
+    resources :json_previews, only: [:show], path: '/json_preview/:resource_type', as: :json_preview_resource
+
+    # imports
+    resources :imports, only: [:new, :create, :show] do
+      resources :mappings, only: [:edit, :update], controller: 'import_mappings'
+      resources :rows, only: :show, controller: 'import_rows'
+
+      member do
+        put :complete_mapping
+      end
+    end
+
     # audit log
     resources :exports, only: [:index, :new, :create, :show]
 
@@ -155,7 +172,9 @@ Spree::Core::Engine.add_routes do
     # setting up a new store
     resources :stores, only: [:new, :create] do
       resources :role_users, only: [:destroy]
+      resources :links, controller: 'page_links', only: [:create]
     end
+    resources :policies, except: :show
     resources :payment_methods, except: :show
     resources :shipping_methods, except: :show
     resources :shipping_categories, except: :show
@@ -176,46 +195,6 @@ Spree::Core::Engine.add_routes do
     # integrations
     resources :integrations
 
-    # storefront / page builder
-    resource :storefront, only: [:edit, :update], controller: :storefront
-    resources :themes, except: [:new, :show] do
-      member do
-        put :update_with_page
-        put :publish
-        post :clone
-      end
-      resources :sections, controller: 'page_sections', only: %i[new create] do
-        member do
-          patch :move_higher
-          patch :move_lower
-        end
-      end
-    end
-    resources :pages, except: [:show] do
-      resources :sections, controller: 'page_sections', only: %i[new create] do
-        member do
-          patch :move_higher
-          patch :move_lower
-        end
-      end
-    end
-    resources :page_sections, only: %i[edit update destroy] do
-      member do
-        patch :restore_design_settings_to_defaults
-      end
-
-      resources :blocks, controller: 'page_blocks' do
-        member do
-          patch :move_higher
-          patch :move_lower
-        end
-
-        resources :links, controller: 'page_links', only: [:create]
-      end
-      resources :links, controller: 'page_links', only: [:create]
-    end
-    resources :page_links, only: [:edit, :update, :destroy]
-
     resources :posts do
       collection do
         get :select_options, defaults: { format: :json }
@@ -231,7 +210,7 @@ Spree::Core::Engine.add_routes do
         put :resend
       end
     end
-    resources :admin_users, except: [:destroy]
+    resources :admin_users
 
     # Action Text
     namespace :action_text do
@@ -240,10 +219,16 @@ Spree::Core::Engine.add_routes do
 
     # developer tools
     resources :oauth_applications
-    resources :webhooks_subscribers
+    resources :webhook_endpoints do
+      resources :webhook_deliveries, only: [:index, :show]
+    end
 
     # errors
-    get '/forbidden', to: 'errors#forbidden', as: :forbidden
+    get '/forbidden', to: 'errors#show', code: 403, as: :forbidden
+    if Rails.env.test?
+      get '/errors', to: 'errors#show'
+      get '/errors/:path', to: 'errors#show', as: :pathed_errors
+    end
 
     # dashboard
     resource :dashboard, controller: 'dashboard'

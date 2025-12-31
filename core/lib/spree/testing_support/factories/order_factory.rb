@@ -24,6 +24,9 @@ FactoryBot.define do
       after(:create) do |order, evaluator|
         create(:line_item, order: order, price: evaluator.line_items_price)
         order.line_items.reload # to ensure order.line_items is accessible after
+
+        order.update_column(:item_count, order.line_items.count)
+        order.reload
       end
     end
 
@@ -73,7 +76,7 @@ FactoryBot.define do
 
         after(:create) do |order, evaluator|
           order.refresh_shipment_rates(evaluator.shipping_method_filter)
-          order.update_column(:completed_at, Time.current)
+          order.update_column(:completed_at, order.completed_at || Time.current)
         end
 
         factory :completed_order_with_pending_payment do
@@ -110,13 +113,16 @@ FactoryBot.define do
           end
 
           factory :shipped_order do
+            shipment_state { 'shipped' }
+
             after(:create) do |order|
               order.shipments.each do |shipment|
                 shipment.inventory_units.update_all state: 'shipped'
-                shipment.update_column('state', 'shipped')
+                shipment.update_columns(
+                  state: 'shipped',
+                  tracking: '1234567890'
+                )
               end
-              order.update_column('shipment_state', 'shipped')
-              order.reload
             end
           end
         end

@@ -15,6 +15,7 @@ module Spree
                                :line_item_comparison_hooks,
                                :data_feed_types,
                                :export_types,
+                               :import_types,
                                :taxon_rules,
                                :themes,
                                :theme_layout_sections,
@@ -23,14 +24,21 @@ module Spree
                                :page_blocks,
                                :reports,
                                :translatable_resources,
+                               :metafields,
                                :analytics_events,
                                :analytics_event_handlers,
-                               :integrations)
+                               :integrations,
+                               :eventable_models,
+                               :subscribers)
       SpreeCalculators = Struct.new(:shipping_methods, :tax_rates, :promotion_actions_create_adjustments, :promotion_actions_create_item_adjustments)
       PromoEnvironment = Struct.new(:rules, :actions)
       SpreeValidators = Struct.new(:addresses)
+      MetafieldsEnvironment = Struct.new(:types, :enabled_resources)
       isolate_namespace Spree
       engine_name 'spree'
+
+      # Add app/subscribers to autoload paths
+      config.paths.add 'app/subscribers', eager_load: true
 
       rake_tasks do
         load File.join(root, 'lib', 'tasks', 'exchanges.rake')
@@ -47,6 +55,11 @@ module Spree
         Spree::Deprecation = ActiveSupport::Deprecation.new('6.0', 'Spree')
       end
 
+      initializer 'spree.register.subscribers', before: :load_config_initializers do |app|
+        # Initialize subscribers array early so engines can add subscribers via initializers
+        app.config.spree.subscribers = []
+      end
+
       initializer 'spree.register.calculators', before: :after_initialize do |app|
       end
 
@@ -61,6 +74,12 @@ module Spree
       end
 
       initializer 'spree.register.adjustable_adjusters' do |app|
+      end
+
+      initializer 'spree.register.metafields' do |app|
+        app.config.spree.metafields = MetafieldsEnvironment.new
+        app.config.spree.metafields.types = []
+        app.config.spree.metafields.enabled_resources = []
       end
 
       # We need to define promotions rules here so extensions and existing apps
@@ -152,88 +171,18 @@ module Spree
           Spree::Exports::Products,
           Spree::Exports::Orders,
           Spree::Exports::Customers,
-          Spree::Exports::GiftCards
+          Spree::Exports::GiftCards,
+          Spree::Exports::NewsletterSubscribers
+        ]
+
+        Rails.application.config.spree.import_types = [
+          Spree::Imports::Products,
         ]
 
         Rails.application.config.spree.taxon_rules = [
           Spree::TaxonRules::Tag,
           Spree::TaxonRules::AvailableOn,
           Spree::TaxonRules::Sale,
-        ]
-
-        Rails.application.config.spree.themes = [
-          Spree::Themes::Default
-        ]
-
-        Rails.application.config.spree.theme_layout_sections = [
-          Spree::PageSections::AnnouncementBar,
-          Spree::PageSections::Header,
-          Spree::PageSections::Newsletter,
-          Spree::PageSections::Footer
-        ]
-
-        Rails.application.config.spree.pages = [
-          Spree::Pages::Cart,
-          Spree::Pages::Post,
-          Spree::Pages::TaxonList,
-          Spree::Pages::Custom,
-          Spree::Pages::ProductDetails,
-          Spree::Pages::ShopAll,
-          Spree::Pages::Taxon,
-          Spree::Pages::Wishlist,
-          Spree::Pages::SearchResults,
-          Spree::Pages::Checkout,
-          Spree::Pages::Password,
-          Spree::Pages::Homepage,
-          Spree::Pages::Login,
-          Spree::Pages::PostList,
-          Spree::Pages::Account
-        ]
-
-        Rails.application.config.spree.page_sections = [
-          Spree::PageSections::FeaturedPosts,
-          Spree::PageSections::TaxonGrid,
-          Spree::PageSections::ImageWithText,
-          Spree::PageSections::FeaturedTaxon,
-          Spree::PageSections::CollectionBanner,
-          Spree::PageSections::ProductDetails,
-          Spree::PageSections::MainPasswordFooter,
-          Spree::PageSections::RelatedProducts,
-          Spree::PageSections::CustomCode,
-          Spree::PageSections::TaxonBanner,
-          Spree::PageSections::FeaturedProduct,
-          Spree::PageSections::ProductGrid,
-          Spree::PageSections::ImageBanner,
-          Spree::PageSections::PageTitle,
-          Spree::PageSections::MainPasswordHeader,
-          Spree::PageSections::PostDetails,
-          Spree::PageSections::PostGrid,
-          Spree::PageSections::FeaturedTaxons,
-          Spree::PageSections::RichText,
-          Spree::PageSections::Video,
-          Spree::PageSections::Footer,
-          Spree::PageSections::Newsletter,
-          Spree::PageSections::Header,
-          Spree::PageSections::AnnouncementBar
-        ]
-
-        Rails.application.config.spree.page_blocks = [
-          Spree::PageBlocks::Link,
-          Spree::PageBlocks::MegaNav,
-          Spree::PageBlocks::MegaNavWithSubcategories,
-          Spree::PageBlocks::Subheading,
-          Spree::PageBlocks::Heading,
-          Spree::PageBlocks::Nav,
-          Spree::PageBlocks::Buttons,
-          Spree::PageBlocks::Text,
-          Spree::PageBlocks::NewsletterForm,
-          Spree::PageBlocks::Image,
-          Spree::PageBlocks::Products::Title,
-          Spree::PageBlocks::Products::Share,
-          Spree::PageBlocks::Products::Price,
-          Spree::PageBlocks::Products::QuantitySelector,
-          Spree::PageBlocks::Products::VariantPicker,
-          Spree::PageBlocks::Products::BuyButtons
         ]
 
         Rails.application.config.spree.reports = [
@@ -247,7 +196,51 @@ module Spree
           Spree::Property,
           Spree::Taxon,
           Spree::Taxonomy,
-          Spree::Store
+          Spree::Store,
+          Spree::Policy
+        ]
+
+        Rails.application.config.spree.metafields.types = [
+          Spree::Metafields::ShortText,
+          Spree::Metafields::LongText,
+          Spree::Metafields::RichText,
+          Spree::Metafields::Number,
+          Spree::Metafields::Boolean,
+          Spree::Metafields::Json
+        ]
+
+        Rails.application.config.spree.metafields.enabled_resources = [
+          Spree::Address,
+          Spree::Asset,
+          Spree::CreditCard,
+          Spree::CustomDomain,
+          Spree::CustomerReturn,
+          Spree::GiftCard,
+          Spree::Image,
+          Spree::LineItem,
+          Spree::NewsletterSubscriber,
+          Spree::OptionType,
+          Spree::OptionValue,
+          Spree::Order,
+          Spree::Payment,
+          Spree::PaymentMethod,
+          Spree::PaymentSource,
+          Spree::Post,
+          Spree::PostCategory,
+          Spree::Product,
+          Spree::Promotion,
+          Spree::Refund,
+          Spree::Shipment,
+          Spree::ShippingMethod,
+          Spree::StockItem,
+          Spree::StockTransfer,
+          Spree::Store,
+          Spree::StoreCredit,
+          Spree::TaxRate,
+          Spree::Taxon,
+          Spree::Taxonomy,
+          Spree::Variant,
+          Spree.user_class
         ]
 
         Rails.application.config.spree.analytics_events = {
@@ -281,6 +274,57 @@ module Spree
 
         Rails.application.config.spree.validators.addresses = [
           Spree::Addresses::PhoneValidator
+        ]
+
+        # Models that automatically emit lifecycle events (create, update, destroy)
+        # Developers can add/remove models from this list in their initializers
+        Rails.application.config.spree.eventable_models = [
+          Spree::Asset,
+          Spree::CustomerReturn,
+          Spree::Digital,
+          Spree::DigitalLink,
+          Spree::Export,
+          Spree::GiftCard,
+          Spree::GiftCardBatch,
+          Spree::Import,
+          Spree::LineItem,
+          Spree::NewsletterSubscriber,
+          Spree::Order,
+          Spree::Payment,
+          Spree::Post,
+          Spree::PostCategory,
+          Spree::Price,
+          Spree::Product,
+          Spree::Promotion,
+          Spree::Refund,
+          Spree::Report,
+          Spree::ReturnAuthorization,
+          Spree::Shipment,
+          Spree::StockItem,
+          Spree::StockMovement,
+          Spree::StockTransfer,
+          Spree::StoreCredit,
+          Spree::Variant,
+          Spree::WishedItem,
+          Spree::Wishlist
+        ]
+
+        # Enable lifecycle events for configured models
+        Rails.application.config.spree.eventable_models.each do |model|
+          model.publishes_lifecycle_events if model.respond_to?(:publishes_lifecycle_events)
+        end
+
+        # Attach event log subscriber if enabled
+        if Spree::Config.events_log_enabled
+          Spree::EventLogSubscriber.attach_to_notifications
+        end
+
+        # Add core event subscribers
+        # Other engines add their subscribers in their own after_initialize blocks
+        Spree.subscribers.concat [
+          Spree::ExportSubscriber,
+          Spree::ReportSubscriber,
+          Spree::InvitationEmailSubscriber
         ]
       end
 
@@ -320,6 +364,15 @@ module Spree
         end
       end
 
+      # Activate event subscribers after all engines have registered their subscribers
+      # This registers an after_initialize callback late, ensuring it runs after all engine callbacks
+      # Needed for console, jobs, and other contexts where to_prepare doesn't run
+      initializer 'spree.events.schedule_activation', after: :load_config_initializers do |app|
+        app.config.after_initialize do
+          Spree::Events.activate!
+        end
+      end
+
       config.to_prepare do
         # Ensure spree locale paths are present before decorators
         I18n.load_path.unshift(*(Dir.glob(
@@ -331,6 +384,35 @@ module Spree
         # Load application's model / class decorators
         Dir.glob(File.join(File.dirname(__FILE__), '../../../app/**/*_decorator*.rb')) do |c|
           Rails.configuration.cache_classes ? require(c) : load(c)
+        end
+
+        # Re-enable lifecycle events for configured models after code reload
+        # This is needed because after_commit callbacks are lost when classes are reloaded
+        # We must resolve the constants fresh because Zeitwerk creates new class objects
+        Rails.application.config.spree.eventable_models&.each do |model|
+          # Resolve the model constant fresh to handle code reload
+          resolved_model = begin
+            model.is_a?(String) ? model.constantize : model.name.constantize
+          rescue NameError
+            nil
+          end
+
+          next unless resolved_model
+
+          # Reset lifecycle_events_enabled so callbacks can be re-registered
+          resolved_model.lifecycle_events_enabled = false if resolved_model.respond_to?(:lifecycle_events_enabled=)
+          resolved_model.publishes_lifecycle_events if resolved_model.respond_to?(:publishes_lifecycle_events)
+        end
+
+        # Reset and re-activate event subscribers on code reload
+        # activate! will register all subscribers from Spree.subscribers
+        # Note: resolve_subscriber in register_subscribers! handles stale class references
+        Spree::Events.reset!
+        Spree::Events.activate!
+
+        # Re-attach event log subscriber if enabled
+        if Spree::Config.events_log_enabled
+          Spree::EventLogSubscriber.attach_to_notifications
         end
       end
     end

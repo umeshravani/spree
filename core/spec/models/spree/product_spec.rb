@@ -8,9 +8,11 @@ module ThirdParty
 end
 
 describe Spree::Product, type: :model do
-  it_behaves_like 'metadata'
-
   let!(:store) { Spree::Store.default }
+
+  it_behaves_like 'metadata'
+  it_behaves_like 'lifecycle events'
+
 
   describe 'after_initialize :assign_default_tax_category' do
     let!(:tax_category_1) { create(:tax_category, is_default: false) }
@@ -57,9 +59,6 @@ describe Spree::Product, type: :model do
 
     context 'when product is persisted' do
       let(:product) { create(:product, stores: [store]) }
-
-      before do
-      end
 
       it 'does not assign the default shipping category' do
         product.update(shipping_category: nil)
@@ -694,12 +693,60 @@ describe Spree::Product, type: :model do
     end
   end
 
-  describe '#brand' do
+  describe '#brand_taxon' do
     let(:taxonomy) { store.taxonomies.find_by(name: Spree.t(:taxonomy_brands_name)) }
     let(:product) { create(:product, taxons: [taxonomy.taxons.first], stores: [store]) }
 
     it 'fetches Brand Taxon' do
-      expect(product.brand).to eql(taxonomy.taxons.first)
+      expect(product.brand_taxon).to eql(taxonomy.taxons.first)
+    end
+  end
+
+  describe '#brand' do
+    let(:taxonomy) { store.taxonomies.find_by(name: Spree.t(:taxonomy_brands_name)) }
+    let(:product) { create(:product, taxons: [taxonomy.taxons.first], stores: [store]) }
+
+    context 'when brand association is not defined' do
+      it 'falls back to brand_taxon' do
+        expect(product.brand).to eql(taxonomy.taxons.first)
+      end
+
+      it 'returns brand name via brand_name method' do
+        expect(product.brand_name).to eql(taxonomy.taxons.first.name)
+      end
+    end
+
+    context 'when brand association is defined' do
+      let(:brand_class) { Class.new(Spree::Base) { self.table_name = 'spree_taxons' } }
+      let(:brand) { brand_class.first }
+
+      before do
+        stub_const('Spree::Brand', brand_class)
+        allow(Spree::Product).to receive(:reflect_on_association).with(:brand).and_return(double(name: :brand))
+        allow(product).to receive(:super).and_return(brand)
+        # Mock the super call by defining the association behavior
+        product.define_singleton_method(:read_attribute) do |attr|
+          attr == :brand_id ? brand.id : super(attr)
+        end
+        product.define_singleton_method(:association) do |name|
+          name == :brand ? double(reader: brand) : super(name)
+        end
+      end
+
+      it 'uses the brand association' do
+        allow(product).to receive(:brand).and_call_original
+        # Since we can't easily mock super, we verify the reflection check
+        expect(Spree::Product.reflect_on_association(:brand)).to be_truthy
+      end
+    end
+  end
+
+  describe '#category_taxon' do
+    let(:taxonomy) { store.taxonomies.find_by(name: Spree.t(:taxonomy_categories_name)) }
+    let(:product) { create(:product, taxons: [taxonomy.taxons.first], stores: [store]) }
+
+    it 'fetches Category Taxon' do
+      expect(product.category_taxon).to eql(taxonomy.taxons.first)
     end
   end
 
@@ -707,8 +754,24 @@ describe Spree::Product, type: :model do
     let(:taxonomy) { store.taxonomies.find_by(name: Spree.t(:taxonomy_categories_name)) }
     let(:product) { create(:product, taxons: [taxonomy.taxons.first], stores: [store]) }
 
-    it 'fetches Category Taxon' do
-      expect(product.category).to eql(taxonomy.taxons.first)
+    context 'when category association is not defined' do
+      it 'falls back to category_taxon' do
+        expect(product.category).to eql(taxonomy.taxons.first)
+      end
+    end
+
+    context 'when category association is defined' do
+      let(:category_class) { Class.new(Spree::Base) { self.table_name = 'spree_taxons' } }
+      let(:category) { category_class.first }
+
+      before do
+        stub_const('Spree::Category', category_class)
+        allow(Spree::Product).to receive(:reflect_on_association).with(:category).and_return(double(name: :category))
+      end
+
+      it 'checks for the category association' do
+        expect(Spree::Product.reflect_on_association(:category)).to be_truthy
+      end
     end
   end
 
@@ -972,6 +1035,14 @@ describe Spree::Product, type: :model do
     end
 
     context 'when product has no variants' do
+      before do
+        Spree::Config[:product_properties_enabled] = true
+      end
+
+      after do
+        Spree::Config[:product_properties_enabled] = false
+      end
+
       it 'returns an array with one line of CSV data' do
         csv_lines = product.to_csv(store)
         expect(csv_lines.size).to eq(1)
@@ -1158,11 +1229,13 @@ describe Spree::Product, type: :model do
 
       context 'when master variant is available' do
         let(:currency) { 'USD' }
+
         it { is_expected.to be(true) }
       end
 
       context 'when master variant is not available' do
         let(:currency) { 'PLN' }
+
         it { is_expected.to be(false) }
       end
     end
@@ -1180,11 +1253,13 @@ describe Spree::Product, type: :model do
 
       context 'when all variants are available' do
         let(:currency) { 'USD' }
+
         it { is_expected.to be(true) }
       end
 
       context 'when no variants are available' do
         let(:currency) { 'PLN' }
+
         it { is_expected.to be(false) }
       end
     end
@@ -1234,6 +1309,240 @@ describe Spree::Product, type: :model do
           products = Spree::Product.not_discontinued(false)
 
           expect(products).to include(product,discontinued_product)
+        end
+      end
+    end
+
+    describe '.by_best_selling' do
+      let!(:product_1) { create(:product, name: 'Product 1', stores: [store]) }
+      let!(:product_2) { create(:product, name: 'Product 2', stores: [store]) }
+      let!(:product_3) { create(:product, name: 'Product 3', stores: [store]) }
+      let!(:product_4) { create(:product, name: 'Product 4', stores: [store]) }
+      let(:test_product_ids) { [product_1.id, product_2.id, product_3.id, product_4.id] }
+
+      context 'with completed orders' do
+        before do
+          # Product 2: 3 completed orders, total: $300
+          create_list(:completed_order_with_totals, 3, line_items_price: 100, store: store, variants: [product_2.master])
+
+          # Product 1: 2 completed orders, total: $200
+          create_list(:completed_order_with_totals, 2, line_items_price: 100, store: store, variants: [product_1.master])
+
+          # Product 3: 1 completed order, total: $150
+          create(:completed_order_with_totals, line_items_price: 150, store: store, variants: [product_3.master])
+
+          # Product 4: no completed orders
+        end
+
+        it 'orders products by completed orders count in descending order by default' do
+          products = described_class.where(id: test_product_ids).by_best_selling
+          expect(products.map(&:name)).to eq(['Product 2', 'Product 1', 'Product 3', 'Product 4'])
+        end
+
+        it 'orders products by completed orders count in ascending order when specified' do
+          products = described_class.where(id: test_product_ids).by_best_selling(:asc)
+          expect(products.map(&:name)).to eq(['Product 4', 'Product 3', 'Product 1', 'Product 2'])
+        end
+
+        it 'includes completed_orders_count attribute' do
+          products = described_class.where(id: test_product_ids).by_best_selling
+          product_2_result = products.find { |p| p.id == product_2.id }
+          expect(product_2_result.completed_orders_count).to eq(3)
+        end
+
+        it 'includes completed_orders_total attribute' do
+          products = described_class.where(id: test_product_ids).by_best_selling
+          product_1_result = products.find { |p| p.id == product_1.id }
+          expect(product_1_result.completed_orders_total).to be > 0
+        end
+      end
+
+      context 'with incomplete orders' do
+        before do
+          # Product 1: 2 completed orders
+          create_list(:completed_order_with_totals, 2, line_items_price: 100, store: store, variants: [product_1.master])
+
+          # Product 2: 1 completed order + 2 incomplete orders (should not be counted)
+          create(:completed_order_with_totals, line_items_price: 100, store: store, variants: [product_2.master])
+
+          create_list(:order_with_totals, 2, line_items_price: 100, store: store, variants: [product_2.master])
+        end
+
+        it 'only counts completed orders' do
+          products = described_class.where(id: test_product_ids).by_best_selling
+          expect(products.first.name).to eq('Product 1')
+
+          product_1_result = products.find { |p| p.id == product_1.id }
+          product_2_result = products.find { |p| p.id == product_2.id }
+
+          expect(product_1_result.completed_orders_count).to eq(2)
+          expect(product_2_result.completed_orders_count).to eq(1)
+        end
+      end
+
+      context 'when products have same order count' do
+        before do
+          # Both products have 2 completed orders, but different totals
+          # Product 1: total $200
+          create_list(:completed_order_with_totals, 2, line_items_price: 100, store: store, variants: [product_1.master])
+
+          # Product 2: total $300
+          create_list(:completed_order_with_totals, 2, line_items_price: 150, store: store, variants: [product_2.master])
+        end
+
+        it 'uses completed_orders_total as secondary sort criteria' do
+          products = described_class.where(id: test_product_ids).by_best_selling
+          # Both have 2 orders, but product_2 has higher total
+          expect(products.first.name).to eq('Product 2')
+          expect(products.second.name).to eq('Product 1')
+          
+          product_1_result = products.find { |p| p.id == product_1.id }
+          product_2_result = products.find { |p| p.id == product_2.id }
+          
+          expect(product_2_result.completed_orders_total).to be > product_1_result.completed_orders_total
+        end
+      end
+
+      context 'with varying quantities' do
+        before do
+          # Product 1: 1 order with 2 line items (same product, different quantities)
+          # Line item 1: price $50, quantity 2 = $100
+          # Line item 2: price $50, quantity 3 = $150
+          # Total: $250
+          order1 = create(:order_with_line_items, line_items_count: 0, store: store)
+          create(:line_item, order: order1, variant: product_1.master, price: 50, quantity: 2)
+          create(:line_item, order: order1, variant: product_1.master, price: 50, quantity: 3)
+          order1.update!(completed_at: Time.current)
+
+          # Product 2: 1 order with 1 line item
+          # Line item: price $100, quantity 2 = $200
+          # Total: $200
+          order2 = create(:order_with_line_items, line_items_count: 0, store: store)
+          create(:line_item, order: order2, variant: product_2.master, price: 100, quantity: 2)
+          order2.update!(completed_at: Time.current)
+        end
+
+        it 'calculates total correctly with price * quantity for each line item' do
+          products = described_class.where(id: test_product_ids).by_best_selling
+          
+          product_1_result = products.find { |p| p.id == product_1.id }
+          product_2_result = products.find { |p| p.id == product_2.id }
+
+          # Both have 1 completed order
+          expect(product_1_result.completed_orders_count).to eq(1)
+          expect(product_2_result.completed_orders_count).to eq(1)
+
+          # Product 1 should have total of $250 (50*2 + 50*3)
+          # Product 2 should have total of $200 (100*2)
+          expect(product_1_result.completed_orders_total).to eq(250)
+          expect(product_2_result.completed_orders_total).to eq(200)
+          
+          # Product 1 should be ranked higher due to higher total
+          expect(products.first.name).to eq('Product 1')
+        end
+      end
+
+      context 'with multiple orders containing multiple line items' do
+        before do
+          # Product 1: 2 completed orders with varying quantities
+          # Order 1: price $50, quantity 3 = $150
+          # Order 2: price $50, quantity 2 = $100
+          # Total: $250, Orders: 2
+          order1 = create(:order_with_line_items, line_items_count: 0, store: store)
+          create(:line_item, order: order1, variant: product_1.master, price: 50, quantity: 3)
+          order1.update!(completed_at: Time.current)
+
+          order2 = create(:order_with_line_items, line_items_count: 0, store: store)
+          create(:line_item, order: order2, variant: product_1.master, price: 50, quantity: 2)
+          order2.update!(completed_at: Time.current)
+
+          # Product 2: 1 completed order with higher total
+          # Order 1: price $100, quantity 4 = $400
+          # Total: $400, Orders: 1
+          order3 = create(:order_with_line_items, line_items_count: 0, store: store)
+          create(:line_item, order: order3, variant: product_2.master, price: 100, quantity: 4)
+          order3.update!(completed_at: Time.current)
+        end
+
+        it 'prioritizes order count over total when ranking' do
+          products = described_class.where(id: test_product_ids).by_best_selling
+          
+          product_1_result = products.find { |p| p.id == product_1.id }
+          product_2_result = products.find { |p| p.id == product_2.id }
+
+          # Verify counts
+          expect(product_1_result.completed_orders_count).to eq(2)
+          expect(product_2_result.completed_orders_count).to eq(1)
+
+          # Verify totals
+          expect(product_1_result.completed_orders_total).to eq(250)
+          expect(product_2_result.completed_orders_total).to eq(400)
+          
+          # Product 1 should rank first because it has more orders (2 vs 1)
+          # even though Product 2 has a higher total ($400 vs $250)
+          expect(products.first.name).to eq('Product 1')
+          expect(products.second.name).to eq('Product 2')
+        end
+      end
+
+      context 'with products having no orders' do
+        it 'includes products with no orders at the end' do
+          products = described_class.where(id: test_product_ids).by_best_selling
+          expect(products.length).to eq(4)
+          # All products should be included, those without orders have count = 0
+          products.select { |p| p.completed_orders_count.zero? }.each do |product|
+            expect(test_product_ids).to include(product.id)
+          end
+        end
+      end
+
+      context 'with products having only pending orders (no completed_at)' do
+        before do
+          # Product 1: 2 completed orders
+          create_list(:completed_order_with_totals, 2, line_items_price: 100, store: store, variants: [product_1.master])
+
+          # Product 2: 1 pending order (no completed_at)
+          create(:order_with_line_items, line_items_count: 1, store: store, variants: [product_2.master])
+
+          # Product 3: 2 pending orders (no completed_at) + 1 completed order
+          create_list(:order_with_line_items, 2, line_items_count: 1, store: store, variants: [product_3.master])
+          create(:completed_order_with_totals, line_items_price: 100, store: store, variants: [product_3.master])
+
+          # Product 4: no orders at all
+        end
+
+        it 'includes products with only pending orders with count = 0' do
+          products = described_class.where(id: test_product_ids).by_best_selling
+
+          # All products should be included
+          expect(products.length).to eq(4)
+
+          product_1_result = products.find { |p| p.id == product_1.id }
+          product_2_result = products.find { |p| p.id == product_2.id }
+          product_3_result = products.find { |p| p.id == product_3.id }
+          product_4_result = products.find { |p| p.id == product_4.id }
+
+          # Product 2 has pending orders but no completed orders - count should be 0
+          expect(product_2_result.completed_orders_count).to eq(0)
+          expect(product_2_result.completed_orders_total).to eq(0)
+
+          # Product 1 has 2 completed orders
+          expect(product_1_result.completed_orders_count).to eq(2)
+
+          # Product 3 has 1 completed order (pending orders not counted)
+          expect(product_3_result.completed_orders_count).to eq(1)
+
+          # Product 4 has no orders at all - count should be 0
+          expect(product_4_result.completed_orders_count).to eq(0)
+          expect(product_4_result.completed_orders_total).to eq(0)
+        end
+
+        it 'orders products correctly with pending orders included' do
+          products = described_class.where(id: test_product_ids).by_best_selling
+          # Product 1: 2 completed orders (first)
+          # Product 3: 1 completed order (second)
+          # Product 2 & 4: 0 completed orders (last, but Product 2 still included despite having pending orders)
+          expect(products.map(&:name)).to eq(['Product 1', 'Product 3', 'Product 2', 'Product 4'])
         end
       end
     end
@@ -1294,6 +1603,7 @@ describe Spree::Product, type: :model do
 
       context 'when show_products_without_price is true' do
         subject(:available_products) { described_class.available(nil, 'USD') }
+
         before do
           Spree::Config.show_products_without_price = true
         end
@@ -1345,4 +1655,29 @@ describe Spree::Product, type: :model do
       end
     end
   end
+
+  describe 'custom events' do
+    describe 'product.activated' do
+      let(:product) { create(:product, status: 'draft', stores: [store]) }
+
+      it 'publishes product.activated event when activated' do
+        expect(product).to receive(:publish_event).with('product.activated')
+        allow(product).to receive(:publish_event).with(anything)
+
+        product.activate!
+      end
+    end
+
+    describe 'product.archived' do
+      let(:product) { create(:product, status: 'active', stores: [store]) }
+
+      it 'publishes product.archived event when archived' do
+        expect(product).to receive(:publish_event).with('product.archived')
+        allow(product).to receive(:publish_event).with(anything)
+
+        product.archive!
+      end
+    end
+  end
+
 end

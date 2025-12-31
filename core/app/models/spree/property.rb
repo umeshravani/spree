@@ -6,9 +6,6 @@ module Spree
     include Spree::UniqueName
     include Spree::DisplayOn
     include Spree::TranslatableResource
-    if defined?(Spree::Webhooks::HasWebhooks)
-      include Spree::Webhooks::HasWebhooks
-    end
 
     TRANSLATABLE_FIELDS = %i[presentation].freeze
     translates(*TRANSLATABLE_FIELDS, column_fallback: !Spree.always_use_translations?)
@@ -47,6 +44,23 @@ module Spree
         properties = product_properties
         properties = properties.where(id: product_properties_scope) if product_properties_scope.present?
         properties.where.not(value: [nil, '']).pluck(:filter_param, :value).uniq
+      end
+    end
+
+    # Returns the metafield type for the property kind
+    # @return [String] eg. 'Spree::Metafields::ShortText'
+    def kind_to_metafield_type
+      case kind
+      when 'short_text'
+        'Spree::Metafields::ShortText'
+      when 'long_text'
+        'Spree::Metafields::LongText'
+      when 'number'
+        'Spree::Metafields::Number'
+      when 'rich_text'
+        'Spree::Metafields::RichText'
+      else
+        'Spree::Metafields::ShortText'
       end
     end
 

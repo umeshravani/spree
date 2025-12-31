@@ -2,10 +2,8 @@ module Spree
   class Address < Spree.base_class
     require 'validates_zipcode'
 
+    include Spree::Metafields
     include Spree::Metadata
-    if defined?(Spree::Webhooks::HasWebhooks)
-      include Spree::Webhooks::HasWebhooks
-    end
 
     serialize :preferences, type: Hash, coder: YAML, default: {}
 
@@ -43,7 +41,8 @@ module Spree
 
     belongs_to :country, class_name: 'Spree::Country'
     belongs_to :state, class_name: 'Spree::State', optional: true
-    belongs_to :user, class_name: Spree.user_class.name, optional: true, touch: true
+    # we need a safe operator here as Address is added to metafield_enabled_resources in Engine
+    belongs_to :user, class_name: Spree.user_class&.name, optional: true, touch: true
 
     has_many :shipments, inverse_of: :address
 
@@ -74,7 +73,7 @@ module Spree
                                     allow_nil: true }
 
     def address_validators
-      Rails.application.config.spree.validators.addresses.each do |validator|
+      Spree.validators.addresses.each do |validator|
         validates_with validator
       end
     end
@@ -177,7 +176,9 @@ module Spree
     end
 
     def require_phone?
-      Spree::Config[:address_requires_phone]
+      # We want to collect phone number for quick checkout but not to validate it
+      # as it's not available before payment by browser.
+      !quick_checkout && Spree::Config[:address_requires_phone]
     end
 
     def require_zipcode?

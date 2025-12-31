@@ -15,9 +15,7 @@ import "mapkick/bundle"
 
 // Helpers
 import 'spree/admin/helpers/tinymce'
-import 'spree/admin/helpers/canvas'
 import 'spree/admin/helpers/trix/video_embed'
-import 'spree/admin/helpers/bootstrap'
 
 // Stimulus controllers
 import { Application } from "@hotwired/stimulus"
@@ -34,30 +32,32 @@ if (typeof Stimulus === 'undefined') {
 }
 import AutoSubmit from '@stimulus-components/auto-submit'
 import CheckboxSelectAll from 'stimulus-checkbox-select-all'
-import Dropdown from '@stimulus-components/dropdown'
+import Dialog from "@stimulus-components/dialog"
 import TextareaAutogrow from 'stimulus-textarea-autogrow'
 import Notification from 'stimulus-notification'
 import PasswordVisibility from 'stimulus-password-visibility'
 import RailsNestedForm from '@stimulus-components/rails-nested-form'
 import Reveal from 'stimulus-reveal-controller'
 import Sortable from 'stimulus-sortable'
-import { Tabs } from 'tailwindcss-stimulus-components'
-
 import ActiveStorageUpload from 'spree/admin/controllers/active_storage_upload_controller'
 import AdminController from 'spree/admin/controllers/admin_controller'
 import AssetUploaderController from 'spree/admin/controllers/asset_uploader_controller'
 import AutocompleteSelectController from 'spree/admin/controllers/autocomplete_select_controller'
+import AutoScrollController from 'spree/admin/controllers/auto_scroll_controller'
 import BetterSliderController from 'spree/admin/controllers/better_slider_controller'
 import BlockFormController from 'spree/admin/controllers/block_form_controller'
-import BootstrapTabs from 'spree/admin/controllers/bootstrap_tabs_controller'
 import BulkOperationController from 'spree/admin/controllers/bulk_operation_controller'
 import CalculatorFieldsController from 'spree/admin/controllers/calculator_fields_controller'
 import CalendarRangeController from 'spree/admin/controllers/calendar_range_controller'
 import Clipboard from 'spree/admin/controllers/clipboard_controller'
+import CodeMirrorController from 'spree/admin/controllers/codemirror_controller'
 import ColorPaletteController from 'spree/admin/controllers/color_palette_controller'
 import ColorPickerController from 'spree/admin/controllers/color_picker_controller'
+import DropdownController from 'spree/admin/controllers/dropdown_controller'
 import FiltersController from 'spree/admin/controllers/filters_controller'
 import FontPickerController from 'spree/admin/controllers/font_picker_controller'
+import HighlightController from 'spree/admin/controllers/highlight_controller'
+import ImportFormController from 'spree/admin/controllers/import_form_controller'
 import MediaFormController from 'spree/admin/controllers/media_form_controller'
 import MultiInputController from 'spree/admin/controllers/multi_input_controller'
 import MultiTomSelectController from 'spree/admin/controllers/multi_tom_select_controller'
@@ -74,11 +74,16 @@ import SearchPickerController from 'spree/admin/controllers/search_picker_contro
 import SectionFormController from 'spree/admin/controllers/section_form_controller'
 import SelectController from 'spree/admin/controllers/select_controller'
 import SeoFormController from 'spree/admin/controllers/seo_form_controller'
+import SidebarController from 'spree/admin/controllers/sidebar_controller'
 import SlugFormController from 'spree/admin/controllers/slug_form_controller'
 import StickyController from 'spree/admin/controllers/sticky_controller'
+import SortableAutoSubmit from 'spree/admin/controllers/sortable_auto_submit_controller'
 import SortableTree from 'spree/admin/controllers/sortable_tree_controller'
 import StockTransferController from 'spree/admin/controllers/stock_transfer_controller'
 import StoreFormController from 'spree/admin/controllers/store_form_controller'
+import TabsController from 'spree/admin/controllers/tabs_controller'
+import TooltipController from 'spree/admin/controllers/tooltip_controller'
+import TurboSubmitButtonController from 'spree/admin/controllers/turbo_submit_button_controller'
 import UnitSystemController from 'spree/admin/controllers/unit_system_controller'
 import VariantsFormController from 'spree/admin/controllers/variants_form_controller'
 import AddressAutocompleteController from 'spree/core/controllers/address_autocomplete_controller'
@@ -91,23 +96,30 @@ application.register('address-autocomplete', AddressAutocompleteController)
 application.register('address-form', AddressFormController)
 application.register('admin', AdminController)
 application.register('asset-uploader', AssetUploaderController)
+application.register('auto-scroll', AutoScrollController)
 application.register('auto-submit', AutoSubmit)
 application.register('autocomplete-select', AutocompleteSelectController)
 application.register('better-slider', BetterSliderController)
 application.register('block-form', BlockFormController)
-application.register('bootstrap-tabs', BootstrapTabs) // We should merge with tabs controller/remove this
+application.register('bulk-dialog', Dialog)
 application.register('bulk-operation', BulkOperationController)
 application.register('calculator-fields', CalculatorFieldsController)
 application.register('calendar-range', CalendarRangeController)
 application.register('checkbox-select-all', CheckboxSelectAll)
 application.register('clipboard', Clipboard)
+application.register('codemirror', CodeMirrorController)
 application.register('color-palette', ColorPaletteController)
 application.register('color-picker', ColorPickerController)
+application.register('dialog', Dialog)
+application.register('drawer', Dialog)
 application.register('disable-submit-button', DisableSubmitButtonController)
-application.register('dropdown', Dropdown)
+application.register('dropdown', DropdownController)
 application.register('enable-button', EnableButtonController)
+application.register('export-dialog', Dialog)
 application.register('filters', FiltersController)
 application.register('font-picker', FontPickerController)
+application.register('highlight', HighlightController)
+application.register('import-form', ImportFormController)
 application.register('media-form', MediaFormController)
 application.register('multi-input', MultiInputController)
 application.register('multi-tom-select', MultiTomSelectController)
@@ -128,13 +140,17 @@ application.register('search-picker', SearchPickerController)
 application.register('section-form', SectionFormController)
 application.register('select', SelectController)
 application.register('seo-form', SeoFormController)
+application.register('sidebar', SidebarController)
 application.register('slug-form', SlugFormController)
 application.register('sticky', StickyController)
 application.register('sortable', Sortable)
+application.register('sortable-auto-submit', SortableAutoSubmit)
 application.register('sortable-tree', SortableTree)
 application.register('stock-transfer', StockTransferController)
 application.register('store-form', StoreFormController)
-application.register('tabs', Tabs)
+application.register('tabs', TabsController)
+application.register('tooltip', TooltipController)
+application.register('turbo-submit-button', TurboSubmitButtonController)
 application.register('textarea-autogrow', TextareaAutogrow)
 application.register('unit-system', UnitSystemController)
 application.register('variants-form', VariantsFormController)

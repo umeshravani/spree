@@ -53,6 +53,7 @@ Spree::Core::Engine.add_routes do
 
         resources :menus, only: %i[index show]
         resources :cms_pages, only: %i[index show]
+        resources :policies, only: %i[index show]
 
         resources :wishlists do
           get :default, on: :collection
@@ -65,6 +66,9 @@ Spree::Core::Engine.add_routes do
             delete :remove_items
           end
         end
+
+        resources :posts, only: %i[index show]
+        resources :post_categories, only: %i[index show]
 
         get '/digitals/:token', to: 'digitals#download', as: 'digital'
       end
@@ -202,8 +206,6 @@ Spree::Core::Engine.add_routes do
 
         # Webhooks API
         namespace :webhooks do
-          resources :events, only: :index
-          resources :subscribers
         end
 
         # Gift Cards API

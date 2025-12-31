@@ -75,7 +75,9 @@ Spree::Core::Engine.add_routes do
     resource :settings, only: [:update, :show]
 
     # Newsletter
-    resources :newsletter_subscribers, only: [:create]
+    resources :newsletter_subscribers, only: [:create] do
+      get :verify, on: :collection
+    end
 
     # Contact form
     resources :contacts, only: [:new, :create]
@@ -85,6 +87,12 @@ Spree::Core::Engine.add_routes do
     resources :digital_links, only: [:show]
 
     root to: 'home#index'
+  end
+
+  get '/forbidden', to: 'errors#show', code: 403, as: :forbidden
+  if Rails.env.test?
+    get '/errors', to: 'errors#show'
+    get '/errors/:path', to: 'errors#show', as: :pathed_errors
   end
 
   get 'robots.txt' => 'seo#robots'

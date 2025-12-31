@@ -207,10 +207,6 @@ describe Spree::Adjustment, type: :model do
             subject
             expect(adjustment.eligible).to eq true
           end
-
-          it 'touches the promotion' do
-            expect { subject }.to change { promotion.reload.updated_at }
-          end
         end
 
         context "the promotion is not eligible" do
@@ -220,12 +216,54 @@ describe Spree::Adjustment, type: :model do
             subject
             expect(adjustment.eligible).to eq false
           end
-
-          it 'touches the promotion' do
-            expect { subject }.to change { promotion.reload.updated_at }
-          end
         end
       end
+
+      context 'when amount and eligible are the same' do
+        it "does not update the adjustment" do
+          expect(adjustment).to_not receive(:update_column)
+          adjustment.amount = 10
+          adjustment.eligible = true
+          subject
+          expect(adjustment.amount).to eq(10)
+          expect(adjustment.eligible).to eq(true)
+        end
+      end
+    end
+  end
+
+  describe '#cached_source' do
+    let(:order) { create(:order) }
+    let(:tax_rate) { create(:tax_rate) }
+    let(:adjustment) { create(:adjustment, order: order, source: tax_rate) }
+
+    it 'returns the source' do
+      expect(adjustment.cached_source).to eq(tax_rate)
+    end
+
+    it 'uses Rails.cache.fetch to cache the source' do
+      expect(Rails.cache).to receive(:fetch).with(adjustment.source_cache_key).and_call_original
+      adjustment.cached_source
+    end
+
+    it 'returns nil when source_type is blank' do
+      adjustment.update_columns(source_type: nil, source_id: nil)
+      expect(adjustment.cached_source).to be_nil
+    end
+
+    it 'returns nil when source_id is blank' do
+      adjustment.update_columns(source_id: nil)
+      expect(adjustment.cached_source).to be_nil
+    end
+  end
+
+  describe '#source_cache_key' do
+    let(:order) { create(:order) }
+    let(:tax_rate) { create(:tax_rate) }
+    let(:adjustment) { create(:adjustment, order: order, source: tax_rate) }
+
+    it 'returns a cache key based on source type and id' do
+      expect(adjustment.source_cache_key).to eq("spree/adjustment_source/Spree::TaxRate/#{tax_rate.id}")
     end
   end
 end

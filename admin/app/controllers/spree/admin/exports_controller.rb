@@ -3,6 +3,8 @@ module Spree
     class ExportsController < ResourceController
       include ActiveStorage::SetCurrent # Needed for ActiveStorage to work on development env
 
+      include Spree::Admin::SettingsConcern
+
       new_action.before :assign_params
       create.before :set_user
 
@@ -20,15 +22,8 @@ module Spree
         Spree.t('admin.export_created')
       end
 
-      def collection
-        return @collection if @collection.present?
-
-        @collection = super
-
-        params[:q] ||= {}
-        params[:q][:s] ||= 'created_at desc'
-        @search = @collection.ransack(params[:q])
-        @collection = @search.result.includes(:user, attachment_attachment: :blob).page(params[:page])
+      def collection_includes
+        [:user, attachment_attachment: :blob]
       end
 
       def set_user

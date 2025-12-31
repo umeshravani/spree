@@ -62,7 +62,7 @@ module Spree
         promotion = order.promotions.with_coupon_code(coupon_code)
         if promotion.present?
           # Order promotion has to be destroyed before line item removing
-          order.order_promotions.where(promotion_id: promotion.id).destroy_all
+          order.promotions.delete(promotion)
 
           if promotion.multi_codes?
             coupon_code = promotion.coupon_codes.find_by(order: order)
@@ -133,7 +133,7 @@ module Spree
           line_item = order.find_line_item_by_variant(item.variant)
           next if line_item.blank?
 
-          Spree::Dependencies.cart_remove_item_service.constantize.call(order: order, variant: item.variant, quantity: item.quantity)
+          Spree.cart_remove_item_service.call(order: order, variant: item.variant, quantity: item.quantity)
         end
       end
 
@@ -177,8 +177,8 @@ module Spree
 
         # Check for applied adjustments.
         discount = order.all_adjustments.promotion.eligible.detect do |p|
-          p.source.promotion.code.try(:downcase) == coupon_code ||
-            p.source.promotion.coupon_codes.unused.where(code: coupon_code).exists?
+          p.cached_source.promotion.code.try(:downcase) == coupon_code ||
+            Spree::CouponCode.unused.where(promotion_id: p.cached_source.promotion_id, code: coupon_code).exists?
         end
 
         # Check for applied line items.
@@ -191,8 +191,7 @@ module Spree
         if discount || created_line_items
           handle_coupon_code(discount, coupon_code) if discount
 
-          order.update_totals
-          order.persist_totals
+          order.update_with_updater!
           set_success_code :coupon_code_applied
         elsif order.promotions.with_coupon_code(order.coupon_code)
           # since CouponCode is disposable...
@@ -210,7 +209,7 @@ module Spree
       end
 
       def handle_coupon_code(discount, coupon_code)
-        discount.source.promotion.coupon_codes.unused.find_by(code: coupon_code)&.apply_order!(order)
+        Spree::CouponCode.unused.find_by(promotion_id: discount.cached_source.promotion_id, code: coupon_code)&.apply_order!(order)
       end
 
       def load_gift_card_code

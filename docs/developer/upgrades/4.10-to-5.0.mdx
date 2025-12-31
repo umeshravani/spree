@@ -7,10 +7,6 @@ description: This guide covers upgrading a Spree 4.10 application to Spree 5.0.
   Before proceeding to upgrade, please ensure you're at [Spree 4.10](/developer/upgrades/4.9-to-4.10)
 </Info>
 
-<Warning>
-  This guide is a work in progress. If you find any issues, please [report them](https://github.com/spree/spree/issues). If you want to contribute to this guide, please click "Suggest edits" at the bottom of this page. Thank you!
-</Warning>
-
 Spree 5.0 is a major upgrade that introduces many breaking changes. The major changes are:
 
 - Dropped support for Rails < 7.2
@@ -124,6 +120,15 @@ Before upgrading, please ensure you have the following prerequisites:
     This will add devise routes and create controllers for the storefront.
 
     And that's it! You can now login to the admin panel and storefront using your existing users.
+  </Accordion>
+  <Accordion title="5. Migrate data to the new format">
+    In Spree 5 we changed a bit of the data in some models so you will need to run these commands to fix it:
+
+    #### Taxons
+
+    ```ruby
+    Spree::Taxon.all.each { |t| t.set_pretty_name; t.save }
+    ```
   </Accordion>
 </AccordionGroup>
 

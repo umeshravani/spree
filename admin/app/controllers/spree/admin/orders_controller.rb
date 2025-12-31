@@ -1,6 +1,6 @@
 module Spree
   module Admin
-    class OrdersController < Spree::Admin::BaseController
+    class OrdersController < Spree::Admin::ResourceController
       include Spree::Admin::OrderConcern
       include Spree::Admin::OrdersFiltersHelper
       include Spree::Admin::OrderBreadcrumbConcern
@@ -12,11 +12,21 @@ module Spree
 
       helper_method :model_class, :object_url
 
+      # GET /admin/orders/new
+      def new
+        @order = current_store.orders.new
+      end
+
       # POST /admin/orders
       def create
-        @order = Spree::Order.create(created_by: try_spree_current_user, store: current_store)
-
-        redirect_to spree.edit_admin_order_path(@order)
+        @order = current_store.orders.new(permitted_resource_params)
+        @order.created_by = try_spree_current_user
+        if @order.save
+          flash[:success] = flash_message_for(@order, :successfully_created)
+          redirect_to spree.edit_admin_order_path(@order)
+        else
+          render :new, status: :unprocessable_entity
+        end
       end
 
       # GET /admin/orders/:id/edit
@@ -45,11 +55,11 @@ module Spree
 
       # POST /admin/orders/:id/resend
       def resend
-        @order.deliver_order_confirmation_email
-        if @order.errors.any?
-          flash[:error] = @order.errors.full_messages.join(', ')
-        else
+        if @order.completed?
+          Spree::Events.publish('order.resend_confirmation_email', { 'id' => @order.id })
           flash[:success] = Spree.t(:order_email_resent)
+        else
+          flash[:error] = Spree.t(:order_email_resent_error)
         end
 
         redirect_back fallback_location: spree.edit_admin_order_url(@order)
@@ -112,6 +122,10 @@ module Spree
       # needed to show the delete button in the content header
       def object_url
         spree.admin_order_path(@order)
+      end
+
+      def permitted_resource_params
+        params.require(:order).permit(permitted_order_attributes)
       end
     end
   end

@@ -42,14 +42,47 @@ module Spree
       preference :credit_to_new_allocation, :boolean, default: false
       preference :disable_sku_validation, :boolean, default: false # when turned off disables the built-in SKU uniqueness validation
       preference :disable_store_presence_validation, :boolean, default: false # when turned off disables Store presence validation for Products and Payment Methods
+      preference :events_log_enabled, :boolean, default: true # Log all Spree events to Rails logger
       preference :expedited_exchanges, :boolean, default: false # NOTE this requires payment profiles to be supported on your gateway of choice as well as a delayed job handler to be configured with activejob. kicks off an exchange shipment upon return authorization save. charge customer if they do not return items within timely manner.
       preference :expedited_exchanges_days_window, :integer, default: 14 # the amount of days the customer has to return their item after the expedited exchange is shipped in order to avoid being charged
       preference :geocode_addresses, :boolean, default: true
+      preference :images_save_from_url_job_attempts, :integer, default: 5
+
+      # Preprocessed product image variant sizes at 2x retina resolution.
+      # These variants are generated on upload to reduce runtime processing.
+      # When using spree_image_tag, pass variant option instead of width and height.
+      #
+      # Default sizes:
+      #   mini (128x128)     - admin thumbnails, checkout line items
+      #   small (256x256)    - cart/order items, gallery thumbnails
+      #   medium (400x400)   - mobile listing, admin media
+      #   large (720x720)    - product listing, mobile gallery
+      #   xlarge (2000x2000) - gallery main, lightbox
+      #
+      # To customize, override in your initializer:
+      #   Spree::Config.product_image_variant_sizes = {
+      #     mini: [128, 128],
+      #     small: [256, 256],
+      #     # ... your custom sizes
+      #   }
+      attr_writer :product_image_variant_sizes
+
+      def product_image_variant_sizes
+        @product_image_variant_sizes ||= {
+          mini: [128, 128],
+          small: [256, 256],
+          medium: [400, 400],
+          large: [720, 720],
+          xlarge: [2000, 2000],
+          og_image: [1200, 630]
+        }
+      end
       preference :layout, :string, deprecated: 'Please use Spree::Frontend::Config[:layout] instead'
       preference :logo, :string, deprecated: true
       preference :mailer_logo, :string, deprecated: true
       preference :max_level_in_taxons_menu, :integer, deprecated: true
       preference :non_expiring_credit_types, :array, default: []
+      preference :product_properties_enabled, :boolean, default: false # enable legacy product properties
       preference :products_per_page, :integer, default: 12
       preference :require_master_price, :boolean, default: false
       preference :restock_inventory, :boolean, default: true # Determines if a return item is restocked automatically once it has been received

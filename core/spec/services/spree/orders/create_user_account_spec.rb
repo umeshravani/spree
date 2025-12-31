@@ -1,13 +1,14 @@
 require 'spec_helper'
 
 describe Spree::Orders::CreateUserAccount do
+  subject(:service) { described_class.call(order: order, accepts_email_marketing: accepts_email_marketing) }
+
+  let(:accepts_email_marketing) { false }
   let(:store) { @default_store }
   let(:address) { create(:address, country: store.default_country, firstname: 'John', lastname: 'Snow') }
   let(:order) do
     create(:completed_order_with_totals, bill_address: address, ship_address: address, store: store, user: nil, email: 'new@customer.com')
   end
-
-  subject { described_class.call(order: order) }
 
   context 'when order has no user' do
     let(:new_user) { Spree.user_class.find_by!(email: order.email) }
@@ -42,6 +43,16 @@ describe Spree::Orders::CreateUserAccount do
 
     it 'does not create a new user' do
       expect { subject }.to change { Spree.user_class.count }.by(0)
+    end
+
+    it 'assigns the user to the order' do
+      subject
+      expect(order.reload.user).to eq(user)
+    end
+
+    it 'returns success with the user' do
+      expect(subject).to be_success
+      expect(subject.value).to eq(user)
     end
   end
 end

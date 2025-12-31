@@ -125,8 +125,61 @@ module Spree
         :webhooks_subscribers_header_partials,
         :vendors_nav_partials,
         :zones_actions_partials,
-        :zones_header_partials
+        :zones_header_partials,
+        :navigation
       )
+
+      class NavigationEnvironment
+        def initialize
+          @contexts = {}
+        end
+
+        # Register a new navigation context
+        # @param name [Symbol] The name of the navigation context
+        # @return [Spree::Admin::Navigation] The navigation instance
+        def register_context(name)
+          name = name.to_sym
+          @contexts[name] ||= Spree::Admin::Navigation.new(name)
+        end
+
+        # Get a registered navigation context
+        # @param name [Symbol] The name of the navigation context
+        # @return [Spree::Admin::Navigation] The navigation instance
+        # @raise [NoMethodError] if the context hasn't been registered
+        def get_context(name)
+          name = name.to_sym
+          @contexts[name] || raise(NoMethodError, "Navigation context '#{name}' has not been registered. Use Spree.admin.navigation.register_context(:#{name}) first.")
+        end
+
+        # List all registered contexts
+        # @return [Array<Symbol>] Array of registered context names
+        def contexts
+          @contexts.keys
+        end
+
+        # Check if a context exists
+        # @param name [Symbol] The context name to check
+        # @return [Boolean] true if the context is registered
+        def context?(name)
+          @contexts.key?(name.to_sym)
+        end
+
+        # Define accessor methods for predefined and custom contexts
+        def method_missing(method_name, *args)
+          if method_name.to_s.end_with?('=')
+            super
+          else
+            get_context(method_name)
+          end
+        end
+
+        def respond_to_missing?(method_name, include_private = false)
+          method_name.to_s.end_with?('=') ? false : context?(method_name)
+        end
+      end
+
+      # Add app/subscribers to autoload paths
+      config.paths.add 'app/subscribers', eager_load: true
 
       # accessible via Rails.application.config.spree_admin
       initializer 'spree.admin.environment', before: :load_config_initializers do |app|
@@ -137,25 +190,30 @@ module Spree
         Spree::Admin::RuntimeConfig = Spree::Admin::RuntimeConfiguration.new
       end
 
-      initializer 'spree.admin.dartsass_fix' do |app|
-        # we're not using any sass compressors, as we're using dartsass-rails
-        # some gems however like payment_icons still have sassc-rails as a dependency
-        # which sets the css_compressor to :sass and breaks the assets pipeline
-        app.config.assets.css_compressor = nil if app.config.assets.css_compressor == :sass
-      end
-
       # Rails 7.1 introduced a new feature that raises an error if a callback action is missing.
       # We need to disable it as we use a lot of concerns that add callback actions.
       initializer 'spree.admin.disable_raise_on_missing_callback_actions' do |app|
         app.config.action_controller.raise_on_missing_callback_actions = false
       end
 
+      initializer 'spree.admin.tailwind_path', before: :load_config_initializers do
+        ENV['SPREE_ADMIN_PATH'] ||= root.to_s
+      end
+
       initializer 'spree.admin.assets' do |app|
-        app.config.assets.paths << root.join('app/javascript')
-        app.config.assets.paths << root.join('vendor/javascript')
-        app.config.assets.precompile += %w[ spree_admin_manifest bootstrap.bundle.min.js jquery3.min.js ]
-        # fix for TinyMCE-rails gem to work with both propshaft and sprockets
-        app.config.assets.excluded_paths ||= []
+        if app.config.respond_to?(:assets)
+          app.config.assets.paths << root.join('app/javascript')
+          app.config.assets.paths << root.join('vendor/javascript')
+          # Add host app's builds directory for compiled Tailwind CSS
+          app.config.assets.paths << Rails.root.join('app/assets/builds')
+          app.config.assets.precompile += %w[ spree_admin_manifest ] if defined?(Sprockets)
+          # fix for TinyMCE-rails gem to work with both propshaft and sprockets
+          app.config.assets.excluded_paths ||= [] if defined?(Sprockets)
+        end
+      end
+
+      rake_tasks do
+        load root.join('lib/tasks/tailwind.rake')
       end
 
       initializer 'spree.admin.importmap', after: 'importmap' do |app|
@@ -178,12 +236,32 @@ module Spree
         end
       end
 
-      config.after_initialize do
+      config.after_initialize do |app|
         Environment.new.tap do |env|
           env.members.each do |key|
             Rails.application.config.spree_admin.send("#{key}=", [])
           end
         end
+
+        # Register predefined navigation contexts
+        app.config.spree_admin.navigation = NavigationEnvironment.new
+        app.config.spree_admin.navigation.register_context(:sidebar)
+        app.config.spree_admin.navigation.register_context(:settings)
+        app.config.spree_admin.navigation.register_context(:tax_tabs)
+        app.config.spree_admin.navigation.register_context(:shipping_tabs)
+        app.config.spree_admin.navigation.register_context(:team_tabs)
+        app.config.spree_admin.navigation.register_context(:stock_tabs)
+        app.config.spree_admin.navigation.register_context(:returns_tabs)
+        app.config.spree_admin.navigation.register_context(:developers_tabs)
+        app.config.spree_admin.navigation.register_context(:audit_tabs)
+      end
+
+      # Add admin event subscribers
+      config.after_initialize do
+        Spree.subscribers.concat [
+          Spree::Admin::ImportSubscriber,
+          Spree::Admin::ImportRowSubscriber
+        ]
       end
     end
   end

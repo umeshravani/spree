@@ -10,6 +10,9 @@ describe Spree::V2::Storefront::TaxonSerializer do
   let!(:children) { create_list(:taxon, 2, taxonomy: taxonomy, parent: taxon) }
   let(:url_helpers) { Rails.application.routes.url_helpers }
 
+  let!(:metafield_definition) { create(:metafield_definition, :short_text_field, resource_type: 'Spree::Taxon') }
+  let!(:metafield) { create(:metafield, metafield_definition: metafield_definition, resource: taxon, value: 'Additional Info') }
+
   before do
     taxon.reload # Reload taxon to ensure all associations are loaded
   end
@@ -69,10 +72,15 @@ describe Spree::V2::Storefront::TaxonSerializer do
                 ]
               },
               image: {
-                data: {
-                  id: taxon.icon.id.to_s,
-                  type: :taxon_image
-                }
+                data: nil
+              },
+              metafields: {
+                data: [
+                  {
+                    id: metafield.id.to_s,
+                    type: :metafield
+                  }
+                ]
               }
             }
           }
@@ -152,10 +160,15 @@ describe Spree::V2::Storefront::TaxonSerializer do
                 ]
               },
               image: {
-                data: {
-                  id: taxon.icon.id.to_s,
-                  type: :taxon_image
-                }
+                data: nil
+              },
+              metafields: {
+                data: [
+                  {
+                    id: metafield.id.to_s,
+                    type: :metafield
+                  }
+                ]
               }
             }
           }

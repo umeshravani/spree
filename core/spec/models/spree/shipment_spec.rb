@@ -1,6 +1,8 @@
 require 'spec_helper'
 
 describe Spree::Shipment, type: :model do
+  it_behaves_like 'lifecycle events'
+
   let(:inventory_units) { create_list(:inventory_unit, 2) }
   let(:variant) { line_item.variant }
   let!(:line_item) { create(:line_item) }
@@ -42,9 +44,12 @@ describe Spree::Shipment, type: :model do
       expect(shipment.digital?).to eq(false)
     end
 
-    it 'returns false if shipping method is nil' do
-      shipment.shipping_rates.delete_all
-      expect(shipment.digital?).to eq(false)
+    context 'when shipping method is nil' do
+      let(:shipping_method) { nil }
+
+      it 'returns false if shipping method is nil' do
+        expect(shipment.digital?).to eq(false)
+      end
     end
   end
 
@@ -381,6 +386,7 @@ describe Spree::Shipment, type: :model do
     it 'returns true if order is digital and it does not have a ship address' do
       order.ship_address = nil
       order.line_items = [digital_line_item]
+      order.update_with_updater!
       expect(order.digital?).to eq(true)
       expect(shipment.send(:can_get_rates?)).to be_truthy
     end
@@ -1032,6 +1038,42 @@ describe Spree::Shipment, type: :model do
       expect(subject.pluck(:state).uniq).to contain_exactly('ready', 'pending')
       expect(subject).to include(*ready_shipments, *pending_shipments)
       expect(subject).not_to include(*shipped_shipments)
+    end
+  end
+
+  describe 'events' do
+    let(:order) { create(:order_ready_to_ship) }
+    let(:shipment) { order.shipments.first }
+
+    describe 'shipped state transition' do
+      before { shipment.update_column(:tracking, 'TRACK123') }
+
+      it 'publishes shipment.shipped event' do
+        expect(shipment).to receive(:publish_event).with('shipment.shipped')
+        allow(shipment).to receive(:publish_event).with(anything)
+
+        shipment.ship!
+      end
+    end
+
+    describe 'canceled state transition' do
+      it 'publishes shipment.canceled event' do
+        expect(shipment).to receive(:publish_event).with('shipment.canceled')
+        allow(shipment).to receive(:publish_event).with(anything)
+
+        shipment.cancel!
+      end
+    end
+
+    describe 'resumed state transition' do
+      before { shipment.cancel! }
+
+      it 'publishes shipment.resumed event' do
+        expect(shipment).to receive(:publish_event).with('shipment.resumed')
+        allow(shipment).to receive(:publish_event).with(anything)
+
+        shipment.resume!
+      end
     end
   end
 end

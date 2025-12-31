@@ -3,6 +3,7 @@ module Spree
     module Storefront
       class VariantSerializer < BaseSerializer
         include ::Spree::Api::V2::DisplayMoneyHelper
+        include Spree::Api::V2::PublicMetafieldsConcern
 
         set_type :variant
 
@@ -40,9 +41,9 @@ module Spree
           display_compare_at_price(product, params[:currency])
         end
 
-        belongs_to :product
-        has_many :images
-        has_many :option_values
+        belongs_to :product, serializer: Spree.api.storefront_product_serializer
+        has_many :images, serializer: Spree.api.storefront_image_serializer
+        has_many :option_values, serializer: Spree.api.storefront_option_value_serializer
       end
     end
   end

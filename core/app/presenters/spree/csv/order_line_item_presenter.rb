@@ -59,16 +59,17 @@ module Spree
         'Notes'
       ].freeze
 
-      def initialize(order, line_item, index)
+      def initialize(order, line_item, index, metafields = [])
         @order = order
         @line_item = line_item
         @index = index
+        @metafields = metafields
       end
 
-      attr_accessor :order, :line_item, :index
+      attr_accessor :order, :line_item, :index, :metafields
 
       def call
-        [
+        csv = [
           order.number,
           index.zero? ? order.email : nil,
           index.zero? ? order.state : nil,
@@ -85,7 +86,7 @@ module Spree
           index.zero? ? order.total.to_f : nil,
           index.zero? ? order.shipping_method&.name : nil,
           index.zero? ? order.total_weight.to_f : nil,
-          index.zero? && order.payments.valid.any? ? order.payments.valid.first.display_source_name : nil,
+          index.zero? ? order.payments.valid&.first&.display_source_name : nil,
           line_item.product_id,
           line_item.quantity,
           line_item.sku,
@@ -94,7 +95,7 @@ module Spree
           line_item.promo_total.abs,
           line_item.total,
           !line_item.product.digital?,
-          line_item.product.tax_category.present?,
+          line_item.product.tax_category_id.present?,
           line_item.product.try(:vendor_name),
           taxon_dict(line_item.product.main_taxon)[0],
           taxon_dict(line_item.product.main_taxon)[1],
@@ -125,6 +126,12 @@ module Spree
           index.zero? ? order.canceler&.email : nil,
           index.zero? ? order.special_instructions : nil
         ]
+
+        if index.zero?
+          csv += metafields
+        end
+
+        csv
       end
 
       private

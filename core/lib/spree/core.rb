@@ -6,10 +6,10 @@ require 'active_model/railtie'
 require 'active_record/railtie'
 require 'active_storage/engine'
 require 'action_text/engine'
+require 'action_cable/engine'
 
 require 'mail'
 require 'action_mailer/railtie'
-require 'sprockets/railtie'
 
 require 'active_merchant'
 require 'acts_as_list'
@@ -40,7 +40,7 @@ StateMachines::Machine.ignore_method_conflicts = true
 module Spree
   mattr_accessor :base_class, :user_class, :admin_user_class,
                  :private_storage_service_name, :public_storage_service_name,
-                 :cdn_host, :root_domain, :searcher_class, :queues,
+                 :cdn_host, :root_domain, :searcher_class, :events_adapter_class, :queues,
                  :google_places_api_key, :screenshot_api_token
 
   def self.base_class(constantize: true)
@@ -97,16 +97,19 @@ module Spree
   def self.queues
     @@queues ||= OpenStruct.new(
       default: :default,
+      events: :default,
       exports: :default,
+      images: :default,
+      imports: :default,
       reports: :default,
       variants: :default,
       taxons: :default,
       stock_location_stock_items: :default,
       coupon_codes: :default,
-      webhooks: :default,
       themes: :default,
       addresses: :default,
-      gift_cards: :default
+      gift_cards: :default,
+      webhooks: :default
     )
   end
 
@@ -117,6 +120,23 @@ module Spree
       raise 'Spree.searcher_class MUST be a String or Symbol object, not a Class object.'
     elsif @@searcher_class.is_a?(String) || @@searcher_class.is_a?(Symbol)
       constantize ? @@searcher_class.to_s.constantize : @@searcher_class.to_s
+    end
+  end
+
+  # Returns the events adapter class used for publishing and subscribing to events.
+  #
+  # @example Using a custom adapter
+  #   Spree.events_adapter_class = 'MyApp::Events::KafkaAdapter'
+  #
+  # @param constantize [Boolean] whether to return the class or the string
+  # @return [Class, String] the adapter class or its name
+  def self.events_adapter_class(constantize: true)
+    @@events_adapter_class ||= 'Spree::Events::Adapters::ActiveSupportNotifications'
+
+    if @@events_adapter_class.is_a?(Class)
+      raise 'Spree.events_adapter_class MUST be a String or Symbol object, not a Class object.'
+    elsif @@events_adapter_class.is_a?(String) || @@events_adapter_class.is_a?(Symbol)
+      constantize ? @@events_adapter_class.to_s.constantize : @@events_adapter_class.to_s
     end
   end
 
@@ -166,6 +186,223 @@ module Spree
     yield(Spree::Dependencies)
   end
 
+  # Environment accessors for easier configuration access
+  # Instead of Rails.application.config.spree.payment_methods
+  # you can use Spree.payment_methods
+
+  def self.calculators
+    Rails.application.config.spree.calculators
+  end
+
+  def self.calculators=(value)
+    Rails.application.config.spree.calculators = value
+  end
+
+  def self.validators
+    Rails.application.config.spree.validators
+  end
+
+  def self.validators=(value)
+    Rails.application.config.spree.validators = value
+  end
+
+  def self.payment_methods
+    Rails.application.config.spree.payment_methods
+  end
+
+  def self.payment_methods=(value)
+    Rails.application.config.spree.payment_methods = value
+  end
+
+  def self.adjusters
+    Rails.application.config.spree.adjusters
+  end
+
+  def self.adjusters=(value)
+    Rails.application.config.spree.adjusters = value
+  end
+
+  def self.stock_splitters
+    Rails.application.config.spree.stock_splitters
+  end
+
+  def self.stock_splitters=(value)
+    Rails.application.config.spree.stock_splitters = value
+  end
+
+  def self.promotions
+    Rails.application.config.spree.promotions
+  end
+
+  def self.promotions=(value)
+    Rails.application.config.spree.promotions = value
+  end
+
+  def self.line_item_comparison_hooks
+    Rails.application.config.spree.line_item_comparison_hooks
+  end
+
+  def self.line_item_comparison_hooks=(value)
+    Rails.application.config.spree.line_item_comparison_hooks = value
+  end
+
+  def self.data_feed_types
+    Rails.application.config.spree.data_feed_types
+  end
+
+  def self.data_feed_types=(value)
+    Rails.application.config.spree.data_feed_types = value
+  end
+
+  def self.export_types
+    Rails.application.config.spree.export_types
+  end
+
+  def self.export_types=(value)
+    Rails.application.config.spree.export_types = value
+  end
+
+  def self.import_types
+    Rails.application.config.spree.import_types
+  end
+
+  def self.import_types=(value)
+    Rails.application.config.spree.import_types = value
+  end
+
+  def self.taxon_rules
+    Rails.application.config.spree.taxon_rules
+  end
+
+  def self.taxon_rules=(value)
+    Rails.application.config.spree.taxon_rules = value
+  end
+
+  def self.reports
+    Rails.application.config.spree.reports
+  end
+
+  def self.reports=(value)
+    Rails.application.config.spree.reports = value
+  end
+
+  def self.translatable_resources
+    Rails.application.config.spree.translatable_resources
+  end
+
+  def self.translatable_resources=(value)
+    Rails.application.config.spree.translatable_resources = value
+  end
+
+  def self.metafields
+    Rails.application.config.spree.metafields
+  end
+
+  def self.integrations
+    Rails.application.config.spree.integrations
+  end
+
+  def self.integrations=(value)
+    Rails.application.config.spree.integrations = value
+  end
+
+  # Models that automatically emit lifecycle events (create, update, destroy)
+  # @example Adding a custom model to emit events
+  #   Spree.eventable_models << MyCustomModel
+  def self.eventable_models
+    Rails.application.config.spree.eventable_models
+  end
+
+  def self.eventable_models=(value)
+    Rails.application.config.spree.eventable_models = value
+  end
+
+  # Event subscribers that handle lifecycle and custom events
+  # @example Adding a custom subscriber
+  #   Spree.subscribers << MyApp::OrderNotificationSubscriber
+  # @example Removing a built-in subscriber
+  #   Spree.subscribers.delete(Spree::ExportSubscriber)
+  def self.subscribers
+    Rails.application.config.spree.subscribers
+  end
+
+  def self.subscribers=(value)
+    Rails.application.config.spree.subscribers = value
+  end
+
+  def self.analytics
+    @analytics ||= AnalyticsConfig.new
+  end
+
+  # Group analytics configuration options together, but still make it backwards compatible.
+  class AnalyticsConfig
+    def events
+      Rails.application.config.spree.analytics_events
+    end
+
+    def events=(value)
+      Rails.application.config.spree.analytics_events = value
+    end
+
+    def handlers
+      Rails.application.config.spree.analytics_event_handlers
+    end
+
+    def handlers=(value)
+      Rails.application.config.spree.analytics_event_handlers = value
+    end
+  end
+
+  # Permission configuration accessor for managing role-to-permission-set mappings.
+  #
+  # @example Assigning permission sets to a role
+  #   Spree.permissions.assign(:customer_service, [
+  #     Spree::PermissionSets::OrderDisplay,
+  #     Spree::PermissionSets::UserManagement
+  #   ])
+  #
+  # @example Clearing permission sets from a role
+  #   Spree.permissions.clear(:customer_service)
+  #
+  # @return [Spree::PermissionConfiguration] the permission configuration instance
+  def self.permissions
+    @permissions ||= PermissionConfiguration.new
+  end
+
+  class << self
+    # Dynamic methods for core dependencies
+    #
+    # @example Getting a dependency (returns resolved class)
+    #   Spree.cart_add_item_service.call(order: order, variant: variant)
+    #
+    # @example Setting a dependency
+    #   Spree.cart_add_item_service = MyApp::CartAddItem
+    def method_missing(method_name, *args, &block)
+      base_name = method_name.to_s.chomp('=').to_sym
+
+      return super unless core_dependency?(base_name)
+
+      if method_name.to_s.end_with?('=')
+        Spree::Dependencies.send(method_name, args.first)
+      else
+        # Returns resolved class (not string)
+        Spree::Dependencies.send("#{method_name}_class")
+      end
+    end
+
+    def respond_to_missing?(method_name, include_private = false)
+      base_name = method_name.to_s.chomp('=').to_sym
+      core_dependency?(base_name) || super
+    end
+
+    private
+
+    def core_dependency?(name)
+      defined?(Spree::Dependencies) &&
+        Spree::Dependencies.class::INJECTION_POINTS.include?(name)
+    end
+  end
+
   module Core
     autoload :ProductFilters, 'spree/core/product_filters'
     autoload :TokenGenerator, 'spree/core/token_generator'
@@ -189,7 +426,10 @@ require 'spree/permitted_attributes'
 require 'spree/service_module'
 require 'spree/database_type_utilities'
 require 'spree/analytics'
+require 'spree/events'
+require 'spree/webhooks'
 
+require 'spree/core/partials'
 require 'spree/core/importer'
 require 'spree/core/query_filters'
 require 'spree/core/controller_helpers/auth'
@@ -206,4 +446,4 @@ require 'spree/core/preferences/store'
 require 'spree/core/preferences/scoped_store'
 require 'spree/core/preferences/runtime_configuration'
 
-require 'spree/core/webhooks'
+require 'spree/core/permission_configuration'

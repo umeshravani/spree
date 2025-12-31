@@ -11,6 +11,10 @@ module Spree
 
     include Spree::Core::NumberGenerator.new(prefix: 'EF')
 
+    # Set event prefix for all Export subclasses
+    # This ensures Spree::Exports::Products publishes 'export.create' not 'products.create'
+    self.event_prefix = 'export'
+
     #
     # Associations
     #
@@ -42,8 +46,9 @@ module Spree
     # Callbacks
     #
     before_validation :set_default_format, on: :create
+    before_validation :normalize_search_params, on: :create, if: -> { search_params.present? }
     before_create :clear_search_params, if: -> { record_selection == 'all' }
-    after_commit :generate_async, on: :create
+    # NOTE: generate_async is now handled by Spree::ExportSubscriber listening to 'export.create' event
 
     #
     # Virtual attributes
@@ -89,6 +94,13 @@ module Spree
       raise NotImplementedError, 'csv_headers must be implemented'
     end
 
+    # Returns an array of metafield headers for the model
+    #
+    # @return [Array<String>]
+    def metafields_headers
+      @metafields_headers ||= Spree::MetafieldDefinition.for_resource_type(model_class.to_s).order(:namespace, :key).map(&:csv_header_name)
+    end
+
     def build_csv_line(_record)
       raise NotImplementedError, 'build_csv_line must be implemented'
     end
@@ -127,8 +139,29 @@ module Spree
       end
     end
 
+    # Ensures search params maintain consistent format between UI and exports
+    # - Preserves valid JSON unchanged
+    # - Converts Ruby hashes to JSON strings
+    # - Handles malformed input gracefully
+    def normalize_search_params
+      return if search_params.blank?
+
+      if search_params.is_a?(Hash)
+        self.search_params = search_params.to_json
+        return
+      end
+
+      begin
+        # It's a string, so we parse and re-dump to ensure consistency
+        parsed = JSON.parse(search_params.to_s)
+        self.search_params = parsed.to_json
+      rescue JSON::ParserError
+        # Leave as-is if not valid JSON string
+      end
+    end
+
     def current_ability
-      @current_ability ||= Spree::Dependencies.ability_class.constantize.new(user, { store: store })
+      @current_ability ||= Spree.ability_class.new(user, { store: store })
     end
 
     # eg. Spree::Exports::Products => products-store-my-store-code-20241030133348.csv
@@ -146,7 +179,7 @@ module Spree
 
     class << self
       def available_types
-        Rails.application.config.spree.export_types
+        Spree.export_types
       end
 
       def available_models
@@ -159,7 +192,11 @@ module Spree
 
       # eg. Spree::Exports::Products => Spree::Product
       def model_class
-        "Spree::#{to_s.demodulize.singularize}".constantize
+        klass = "Spree::#{to_s.demodulize.singularize}".safe_constantize
+
+        raise NameError, "Missing model class for #{to_s}" unless klass
+
+        klass
       end
     end
 

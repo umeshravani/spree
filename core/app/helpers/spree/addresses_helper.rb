@@ -1,6 +1,14 @@
 # https://github.com/spree-contrib/spree_address_book/blob/master/app/helpers/spree/addresses_helper.rb
 module Spree
   module AddressesHelper
+    def address_form_countries_states_cache_key
+      @address_form_countries_states_cache_key ||= [
+        I18n.locale,
+        current_store.cache_key_with_version,
+        current_store.checkout_zone&.cache_key_with_version
+      ].compact
+    end
+
     def address_field(form, method, address_id = 'b', required = false, text_field_attributes: {}, &handler)
       content_tag :div, id: [address_id, method].join, class: 'mb-4' do
         if handler
@@ -23,7 +31,7 @@ module Spree
       method_name = Spree.t(:zipcode)
       form.label(:zipcode, method_name, id: address_id + '_zipcode_label', class: 'block text-xs text-neutral-600 mb-1') +
       form.text_field(:zipcode,
-                      class: 'text-input h-full',
+                      class: 'text-input',
                       placeholder: method_name,
                       required: country&.zipcode_required?,
                       data: { 'address-form-target': 'zipcode', address_autocomplete_target: 'zipcode' },
@@ -67,16 +75,22 @@ module Spree
     end
 
     def current_store_countries_with_states_ids
-      @current_store_countries_with_states_ids ||= current_store.countries_available_for_checkout.where(states_required: true).includes(:states).each_with_object([]) do |country, memo|
+      Spree::Deprecation.warn('current_store_countries_with_states_ids is deprecated and will be removed in Spree 5.3')
+
+      @current_store_countries_with_states_ids ||= current_store.countries_available_for_checkout.find_all { |country| country.states_required? }.each_with_object([]) do |country, memo|
         memo << current_store.states_available_for_checkout(country)
       end.flatten.pluck(:country_id)
     end
 
     def current_store_countries_without_states_ids
-      @current_store_countries_without_states_ids ||= current_store.countries_available_for_checkout.where(states_required: false).ids
+      Spree::Deprecation.warn('current_store_countries_without_states_ids is deprecated and will be removed in Spree 5.3')
+
+      @current_store_countries_without_states_ids ||= current_store.countries_available_for_checkout.find_all { |country| !country.states_required? }.pluck(:id)
     end
 
     def current_store_supported_countries_ids
+      Spree::Deprecation.warn('current_store_supported_countries_ids is deprecated and will be removed in Spree 5.3')
+
       @current_store_supported_countries_ids ||= Rails.cache.fetch(['current_store_supported_countries_ids', current_store]) do
         (current_store_countries_with_states_ids + current_store_countries_without_states_ids).uniq
       end
@@ -90,7 +104,7 @@ module Spree
           addresses.
           includes(:country, :state).
           not_quick_checkout.
-          where(country_id: current_store_supported_countries_ids).
+          where(country_id: current_store.countries_available_for_checkout.pluck(:id)).
           includes(:user)
       end
     end

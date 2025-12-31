@@ -3,9 +3,6 @@ module Spree
     DIGITAL_NAME = 'Digital'
 
     include Spree::UniqueName
-    if defined?(Spree::Webhooks::HasWebhooks)
-      include Spree::Webhooks::HasWebhooks
-    end
 
     with_options inverse_of: :shipping_category do
       has_many :products
@@ -15,6 +12,12 @@ module Spree
 
     def self.digital
       find_by(name: DIGITAL_NAME)
+    end
+
+    def includes_digital_shipping_method?
+      Rails.cache.fetch("#{cache_key_with_version}/includes-digital-shipping-method") do
+        shipping_methods.digital.exists?
+      end
     end
   end
 end

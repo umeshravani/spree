@@ -4,7 +4,7 @@ module Spree
       # render a checkbox to select all items for bulk operations
       # @return [String]
       def bulk_operations_select_all_checkbox
-        content_tag :div, class: "custom-control custom-checkbox ml-1" do
+        content_tag :div, class: "custom-control form-checkbox ml-1" do
           check_box_tag(
             nil,
             nil,
@@ -21,7 +21,7 @@ module Spree
       # @param object [Spree::Product, Spree::User, Spree::Order]
       # @return [String]
       def bulk_operations_checkbox(object)
-        content_tag :div, class: "custom-control custom-checkbox ml-1" do
+        content_tag :div, class: "custom-control form-checkbox ml-1" do
           check_box_tag(
             "ids[]",
             object.id,
@@ -45,24 +45,27 @@ module Spree
       # @return [String]
       def bulk_action_link(text, path, options = {})
         options[:data] ||= {}
-        options[:data][:action] ||= 'click->bulk-operation#setBulkAction'
-        options[:data][:turbo_frame] ||= :bulk_modal
+        options[:data][:action] ||= 'click->bulk-operation#setBulkAction click->bulk-dialog#open'
+        options[:data][:turbo_frame] ||= :bulk_dialog
         options[:data][:url] ||= options[:url]
-        options[:class] ||= 'btn btn-light'
+        options[:class] ||= 'btn'
 
+        tooltip_text = nil
         if options[:icon]
           if options[:only_icon]
-            options[:title] = text
+            tooltip_text = options[:title] || text
             text = icon(options[:icon], class: 'mr-0')
-            options[:class] += ' with-tip'
+            options[:data][:controller] = 'tooltip'
+            options.delete(:title)
           else
             text = icon(options[:icon]) + ' ' + text
           end
         end
 
-        content_tag :span, data: { toggle: 'modal', target: '#bulk-modal' } do
-          link_to text, path, options
-        end
+        link_content = text
+        link_content += tooltip(tooltip_text) if tooltip_text
+
+        link_to link_content, path, options
       end
 
       # render a close button for the bulk modal
@@ -70,11 +73,10 @@ module Spree
         button_tag(
           '',
           type: 'button',
-          class: 'btn-close',
+          class: 'btn-close mr-1',
           data: {
-            dismiss: 'modal',
-            aria_label: Spree.t(:close),
-            action: 'bulk-operation#cancel'
+            action: 'bulk-operation#cancel',
+            aria_label: Spree.t(:close)
           }
         )
       end

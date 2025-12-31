@@ -65,16 +65,16 @@ Always inherit from `Spree.base_class` when creating models.
 - Use ActiveRecord associations appropriately, always pass `class_name` and `dependent` options
 - Implement concerns for shared functionality
 - Use scopes for reusable query patterns
-- Include `Spree::Metadata` concern for models that need metadata support
+- Include `Spree::Metafields` concern for models that need metadata support
+- Don't use enums, use string columns instead
+- For models that require state machine, please use https://github.com/state-machines/state_machines-activerecord gem, default column should be `status`, legacy models use `state`
 
 ```ruby
 # ✅ Good model structure
 class Spree::Product < ApplicationRecord
-  include Spree::Metadata
+  include Spree::Metafields
   
   has_many :variants, class_name: 'Spree::Variant', dependent: :destroy
-  has_many :product_properties, class_name: 'Spree::ProductProperty', dependent: :destroy
-  has_many :properties, through: :product_properties, source: :property
   
   scope :available, -> { where(available_on: ..Time.current) }
   
@@ -150,6 +150,7 @@ This will create a dummy rails application and run migrations. If there's alread
 - Use Spree's factory bot definitions
 - For controller specs always add `render_views` to the test
 - For controller spec authentication use `stub_authorization!`
+- Don't create test scenarios for standard rails validation, only for custom validations
 
 ```ruby
 # ✅ Proper spec structure
@@ -212,19 +213,19 @@ let(:variant) { build(:variant, product: product) }
 
 ```ruby
 # ✅ Proper migration structure
-class CreateSpreeMetafields < ActiveRecord::Migration[7.0]
+class CreateSpreeMetafields < ActiveRecord::Migration[8.0]
   def change
     create_table :spree_metafields do |t|
       t.string :key, null: false
       t.text :value, null: false
       t.string :kind, null: false
       t.string :visibility, null: false
-      t.references :owner, polymorphic: true, null: false
+      t.references :resource, polymorphic: true, null: false
       t.timestamps
     end
     
-    add_index :spree_metafields, [:owner_type, :owner_id, :key, :visibility], 
-              name: 'index_spree_metafields_on_owner_and_key_and_visibility'
+    add_index :spree_metafields, [:resource_type, :resource_id, :key, :visibility], 
+              name: 'index_spree_metafields_on_resource_and_key_and_visibility'
   end
 end
 ```
@@ -270,7 +271,7 @@ For edit resource form:
 And the re-usable form partial should be in `app/views/spree/admin/products/_form.html.erb`, eg.
 
 ```erb
-<div class="card mb-4">
+<div class="card mb-6">
   <div class="card-header">
     <h5 class="card-title">
       <%= Spree.t(:general_settings) %>
@@ -346,6 +347,10 @@ end
 ```
 
 This document should be updated as Spree evolves and new patterns emerge. Always refer to the official Spree documentation for the most current practices and guidelines.
+
+## Routes
+
+- Always use `spree.` routes engine when using routes in views and controllers
 
 ## Internationalization
 

@@ -2,17 +2,23 @@ module Spree
   module UserMethods
     extend ActiveSupport::Concern
 
+    include Spree::Metafields
     include Spree::UserPaymentSource
     include Spree::UserReporting
     include Spree::UserRoles
+    include Spree::AdminUserMethods
     include Spree::RansackableAttributes
     include Spree::MultiSearchable
+    include Spree::Publishable
+
     included do
+      # Enable lifecycle events for user models
+      publishes_lifecycle_events
+
       # we need to have this callback before any dependent: :destroy associations
       # https://github.com/rails/rails/issues/3458
       before_validation :clone_billing_address, if: :use_billing?
       before_destroy :check_completed_orders
-      after_destroy :nullify_approver_id_in_approved_orders
 
       attr_accessor :use_billing
 
@@ -61,7 +67,7 @@ module Spree
           name_conditions << multi_search_condition(self, :last_name, full_name.last)
         end
 
-        where(email: sanitized_query).or(where(name_conditions.reduce(:or)))
+        where(arel_table[:email].lower.eq(query.downcase)).or(where(name_conditions.reduce(:or)))
       end
 
       self.whitelisted_ransackable_associations = %w[bill_address ship_address addresses tags spree_roles]
@@ -82,6 +88,11 @@ module Spree
         left_outer_joins(:addresses).
           where("#{Spree::Address.table_name}.firstname LIKE ? or #{Spree::Address.table_name}.lastname LIKE ? or #{table_name}.email LIKE ?",
                 "%#{address}%", "%#{address}%", "%#{email}%")
+      end
+
+      # We override this method because we cannot use for_store on users because it will return admin users
+      def self.for_store(store)
+        self
       end
     end
 
@@ -131,23 +142,42 @@ module Spree
     # Returns true if the user can be deleted
     # @return [Boolean]
     def can_be_deleted?
-      orders.complete.none?
+      if role_users.where(resource: Spree::Store.current).exists?
+        Spree::Store.current.users.where.not(id: id).exists?
+      else
+        orders.complete.none?
+      end
     end
 
+    # Returns the CSV row representation of the user
+    # @param [Spree::Store] store
+    # @return [Array<String>]
     def to_csv(_store = nil)
       Spree::CSV::CustomerPresenter.new(self).call
+    end
+
+    # Returns the full name of the user
+    # @return [String]
+    def full_name
+      name&.full
+    end
+
+    def event_serializer_class
+      Spree::Events::UserSerializer
+    end
+
+    def event_prefix
+      if self.class == Spree.admin_user_class && Spree.admin_user_class != Spree.user_class
+        'admin'
+      else
+        'user'
+      end
     end
 
     private
 
     def check_completed_orders
-      raise Spree::Core::DestroyWithOrdersError if orders.complete.present?
-    end
-
-    def nullify_approver_id_in_approved_orders
-      return unless Spree.admin_user_class != Spree.user_class
-
-      Spree::Order.where(approver_id: id).update_all(approver_id: nil)
+      raise Spree::Core::DestroyWithOrdersError if !spree_admin? && orders.complete.present?
     end
 
     def clone_billing_address

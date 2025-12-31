@@ -8,8 +8,8 @@ RSpec.describe Spree::Checkout::Advance do
   describe '#call' do
     context 'with no specific target state' do
       before do
-        order.update!(total: 19.99, payment_total: 0, shipment_total: 5, item_total: 14.99, completed_at: nil)
-        order.payments.last.update!(amount: 19.99)
+        order.update!(total: 29.99, payment_total: 0, shipment_total: 10.00, item_total: 19.99, completed_at: nil)
+        order.payments.first.update!(amount: 29.99)
         order.reload
 
         Spree::StockItem.where(variant: order.variants).update_all(count_on_hand: 10, backorderable: false)
@@ -133,7 +133,7 @@ RSpec.describe Spree::Checkout::Advance do
 
     context 'when next service fails' do
       before do
-        allow_next_instance_of(Spree::Dependencies.checkout_next_service.constantize) do |instance|
+        allow_next_instance_of(Spree.checkout_next_service) do |instance|
           allow(instance).to receive(:call).and_return(Spree::ServiceModule::Result.new(false, order))
         end
       end
@@ -151,7 +151,7 @@ RSpec.describe Spree::Checkout::Advance do
       let(:order) { create(:order_ready_to_ship) }
 
       it 'stops advancement' do
-        expect(Spree::Dependencies.checkout_next_service.constantize).not_to receive(:new)
+        expect(Spree.checkout_next_service).not_to receive(:new)
 
         result = service.call(order: order)
 
@@ -162,7 +162,7 @@ RSpec.describe Spree::Checkout::Advance do
   end
 
   def ensure_states_updated_only_once
-    updater_spy = Spree::OrderUpdater.new(order)
+    updater_spy = order.updater
     allow(order).to receive(:updater).and_return(updater_spy)
     expect(updater_spy).to receive(:update_shipment_state).once.and_call_original
     expect(updater_spy).to receive(:update_payment_state).once.and_call_original

@@ -14,6 +14,7 @@ module Spree
     class_option :install_admin, type: :boolean, default: false, banner: 'installs default rails admin'
     class_option :auto_accept, type: :boolean
     class_option :user_class, type: :string
+    class_option :admin_user_class, type: :string
     class_option :admin_email, type: :string
     class_option :admin_password, type: :string
     class_option :lib_name, type: :string, default: 'spree'
@@ -57,18 +58,23 @@ module Spree
 
     def install_storefront
       if @install_storefront && Spree::Core::Engine.frontend_available?
-        generate 'spree:storefront:install'
+        generate "spree:storefront:install#{' --force' if options[:force]}"
 
         # generate devise controllers if authentication is devise
         if @authentication == 'devise'
-          generate 'spree:storefront:devise'
+          generate "spree:storefront:devise#{' --force' if options[:force]}"
         end
       end
     end
 
     def install_admin
       if @install_admin && Spree::Core::Engine.admin_available?
-        generate 'spree:admin:install'
+        generate "spree:admin:install#{' --force' if options[:force]}"
+
+        # generate devise controllers if authentication is devise
+        if @authentication == 'devise'
+          generate "spree:admin:devise#{' --force' if options[:force]}"
+        end
       end
     end
 
@@ -95,7 +101,6 @@ module Spree
       append_file 'db/seeds.rb', <<-SEEDS.strip_heredoc
 
         Spree::Core::Engine.load_seed if defined?(Spree::Core)
-        Spree::Auth::Engine.load_seed if defined?(Spree::Auth)
       SEEDS
     end
 
@@ -106,6 +111,7 @@ module Spree
         silence_warnings { rake 'action_text:install:migrations' }
         silence_warnings { rake 'spree:install:migrations' }
         silence_warnings { rake 'spree_api:install:migrations' }
+        silence_warnings { rake 'spree_page_builder:install:migrations' } if @install_storefront && Spree::Core::Engine.frontend_available?
       end
     end
 
@@ -133,7 +139,7 @@ module Spree
           cmd.call
         end
       else
-        say_status :skipping, 'seed data (you can always run rake db:seed)'
+        say_status :skipping, 'seed data (you can always run bin/rails db:seed)'
       end
     end
 
@@ -178,24 +184,6 @@ module Spree
         puts "Spree has been installed successfully. You're all ready to go!"
         puts ' '
         puts 'Enjoy!'
-      end
-    end
-
-    protected
-
-    def javascript_exists?(script)
-      extensions = %w(.js.coffee .js.erb .js.coffee.erb .js)
-      file_exists?(extensions, script)
-    end
-
-    def stylesheet_exists?(stylesheet)
-      extensions = %w(.css.scss .css.erb .css.scss.erb .css)
-      file_exists?(extensions, stylesheet)
-    end
-
-    def file_exists?(extensions, filename)
-      extensions.detect do |extension|
-        File.exist?("#{filename}#{extension}")
       end
     end
 

@@ -52,6 +52,10 @@ module Spree
         spree.edit_admin_taxonomy_taxon_path(@taxon.taxonomy_id, @taxon.id)
       end
 
+      def update_turbo_stream_enabled?
+        true
+      end
+
       def destroy_turbo_stream_enabled?
         true && !params[:force_redirect].to_b
       end
@@ -93,7 +97,7 @@ module Spree
       end
 
       def load_form_data
-        @taxon_rules = Rails.application.config.spree.taxon_rules
+        @taxon_rules = Spree.taxon_rules
         @rule_types = @taxon_rules.map do |taxon_rule|
           [Spree.t("admin.taxon_rules.#{taxon_rule.to_s.demodulize.underscore}"), taxon_rule.to_s]
         end

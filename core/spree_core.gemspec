@@ -20,15 +20,15 @@ Gem::Specification.new do |s|
     "source_code_uri"   => "https://github.com/spree/spree/tree/v#{s.version}",
   }
 
-  s.required_ruby_version     = '>= 3.0'
+  s.required_ruby_version     = '>= 3.2'
   s.required_rubygems_version = '>= 1.8.23'
 
-  s.files        = Dir["{app,config,db,lib,vendor}/**/*", "LICENSE.md", "Rakefile", "README.md"].reject { |f| f.match(/^spec/) && !f.match(/^spec\/fixtures/) }
+  s.files        = Dir["{app,config,db,lib,vendor}/**/*", "spec/fixtures/**/*", "LICENSE.md", "Rakefile", "README.md"].reject { |f| f.match(/^spec/) && !f.match(/^spec\/fixtures/) }
   s.require_path = 'lib'
 
   s.add_development_dependency 'i18n-tasks'
 
-  s.add_dependency 'rails', '>= 7.2', '< 8.1'
+  s.add_dependency 'rails', '>= 7.2', '< 8.2'
 
   s.add_dependency 'activemerchant', '~> 1.67'
   s.add_dependency 'acts_as_list', '>= 0.8'
@@ -45,12 +45,13 @@ Gem::Specification.new do |s|
   s.add_dependency 'money', '~> 6.13'
   s.add_dependency 'monetize', '~> 1.9'
   s.add_dependency 'name_of_person', '~> 1.1'
+  s.add_dependency 'ostruct'
   s.add_dependency 'paranoia', '>= 2.4'
   s.add_dependency 'ransack', '>= 4.1'
   s.add_dependency 'rexml'
   s.add_dependency 'ruby-oembed', '~> 0.18'
-  s.add_dependency 'state_machines-activerecord', '~> 0.10'
-  s.add_dependency 'state_machines-activemodel', '~> 0.10'
+  s.add_dependency 'state_machines-activerecord', '~> 0.100'
+  s.add_dependency 'state_machines-activemodel', '~> 0.100'
   s.add_dependency 'stringex'
   s.add_dependency 'tracking_number'
   s.add_dependency 'validates_zipcode'

@@ -29,6 +29,7 @@ module Spree
     include Spree::NumberAsParam
     include Spree::SingleStoreResource
     include Spree::MemoizedData
+    include Spree::Metafields
     include Spree::Metadata
     include Spree::MultiSearchable
     if defined?(Spree::Security::Orders)
@@ -201,8 +202,8 @@ module Spree
       joins(:refunds).group(:id).having("sum(#{Spree::Refund.table_name}.amount) = #{Spree::Order.table_name}.total")
     }
     scope :partially_refunded, lambda {
-                                joins(:refunds).group(:id).having("sum(#{Spree::Refund.table_name}.amount) < #{Spree::Order.table_name}.total")
-                              }
+      joins(:refunds).group(:id).having("sum(#{Spree::Refund.table_name}.amount) < #{Spree::Order.table_name}.total")
+    }
     scope :with_deleted_bill_address, -> { joins(:bill_address).where.not(Address.table_name => { deleted_at: nil }) }
     scope :with_deleted_ship_address, -> { joins(:ship_address).where.not(Address.table_name => { deleted_at: nil }) }
 
@@ -228,7 +229,7 @@ module Spree
         conditions << multi_search_condition(Spree::Address, :lastname, full_name.last)
       end
 
-      left_joins(:bill_address).where(email: sanitized_query).or(where(conditions.reduce(:or)))
+      left_joins(:bill_address).where(arel_table[:email].lower.eq(query.downcase)).or(where(conditions.reduce(:or)))
     end
 
     # Use this method in other gems that wish to register their own custom logic
@@ -268,16 +269,14 @@ module Spree
     end
 
     def order_refunded?
-      (payment_state == 'void' && refunds.sum(:amount).positive?) || refunds.sum(:amount) == total
+      (payment_state.in?(%w[void failed]) && refunds.sum(:amount).positive?) ||
+        refunds.sum(:amount) == total_minus_store_credits - additional_tax_total.abs
     end
 
     def partially_refunded?
-      return false if refunds.empty?
+      return false if refunds.empty? || payment_state.in?(%w[void failed])
 
-      # we must deduct not returned amount, otherwise it can look like order has not been fully refunded
-      amount_not_refunded = additional_tax_total.abs + total_applied_store_credit
-
-      refunds.sum(:amount) < total - amount_not_refunded
+      refunds.sum(:amount) < total_minus_store_credits - additional_tax_total.abs
     end
 
     # Indicates whether or not the user is allowed to proceed to checkout.
@@ -301,7 +300,7 @@ module Spree
     # If true, causes the confirmation step to happen during the checkout process
     def confirmation_required?
       Spree::Config[:always_include_confirm_step] ||
-        payments.valid.map(&:payment_method).compact.any?(&:payment_profiles_supported?) ||
+        payments.valid.map(&:payment_method).compact.any?(&:confirmation_required?) ||
         # Little hacky fix for #4117
         # If this wasn't here, order would transition to address state on confirm failure
         # because there would be no valid payments any more.
@@ -350,7 +349,7 @@ module Spree
     end
 
     def updater
-      @updater ||= OrderUpdater.new(self)
+      @updater ||= Spree.order_updater.new(self)
     end
 
     def update_with_updater!
@@ -392,6 +391,9 @@ module Spree
       ActiveRecord::Base.connected_to(role: :writing) do
         self.class.unscoped.where(id: self).update_all(changes)
       end
+
+      # Manually publish update event since update_all bypasses callbacks
+      publish_event('order.updated') if changes.present?
     end
 
     def disassociate_user!
@@ -408,7 +410,7 @@ module Spree
     def find_line_item_by_variant(variant, options = {})
       line_items.detect do |line_item|
         line_item.variant_id == variant.id &&
-          Spree::Dependencies.cart_compare_line_items_service.constantize.new.call(order: self, line_item: line_item, options: options).value
+          Spree.cart_compare_line_items_service.new.call(order: self, line_item: line_item, options: options).value
       end
     end
 
@@ -454,7 +456,7 @@ module Spree
 
     def full_name
       @full_name ||= if user.present? && user.name.present?
-                       user.name.full
+                       user.full_name
                      else
                        billing_address&.full_name || email
                      end
@@ -521,12 +523,11 @@ module Spree
 
       touch :completed_at
 
-      deliver_order_confirmation_email unless confirmation_delivered?
-      deliver_store_owner_order_notification_email if deliver_store_owner_order_notification_email?
-
       send_order_placed_webhook
 
       consider_risk
+
+      publish_order_completed_event
     end
 
     def fulfill!
@@ -579,7 +580,7 @@ module Spree
     def empty!
       raise Spree.t(:cannot_empty_completed_order) if completed?
 
-      result = Spree::Dependencies.cart_empty_service.constantize.call(order: self)
+      result = Spree.cart_empty_service.call(order: self)
       result.value
     end
 
@@ -692,6 +693,10 @@ module Spree
       if shipments.any? && !completed?
         shipments.destroy_all
         update_column(:shipment_total, 0)
+
+        # Manually publish update event since update_column bypasses callbacks
+        publish_event('order.updated')
+
         restart_checkout_flow
       end
     end
@@ -701,6 +706,10 @@ module Spree
         state: 'cart',
         updated_at: Time.current
       )
+
+      # Manually publish update event since update_columns bypasses callbacks
+      publish_event('order.updated')
+
       next! unless line_items.empty?
     end
 
@@ -734,24 +743,28 @@ module Spree
 
     def canceled_by(user, canceled_at = nil)
       canceled_at ||= Time.current
+      changes = { canceler_id: user.id, canceled_at: canceled_at }
 
       transaction do
-        update_columns(
-          canceler_id: user.id,
-          canceled_at: canceled_at
-        )
+        update_columns(changes)
         cancel!
       end
+
+      # Manually publish update event since update_columns bypasses callbacks
+      publish_event('order.canceled')
     end
 
     def approved_by(user)
+      approved_at = Time.current
+      changes = { approver_id: user.id, approved_at: approved_at }
+
       transaction do
         approve!
-        update_columns(
-          approver_id: user.id,
-          approved_at: Time.current
-        )
+        update_columns(changes)
       end
+
+      # Manually publish update event since update_columns bypasses callbacks
+      publish_event('order.approved')
     end
 
     def approved?
@@ -777,10 +790,16 @@ module Spree
 
     def considered_risky!
       update_column(:considered_risky, true)
+
+      # Manually publish update event since update_column bypasses callbacks
+      publish_event('order.updated')
     end
 
     def approve!
       update_column(:considered_risky, false)
+
+      # Manually publish update event since update_column bypasses callbacks
+      publish_event('order.approved')
     end
 
     def tax_total
@@ -818,14 +837,22 @@ module Spree
       Spree::CouponCode.find_by(order: self, promotion: promotions).try(:code) || promotions.pluck(:code).compact.first
     end
 
+    # Returns the valid promotions for the order
+    # @return [Array<Spree::OrderPromotion>]
     def valid_promotions
-      order_promotions.where(promotion_id: valid_promotion_ids).uniq(&:promotion_id)
+      order_promotions.includes(:promotion).where(promotion_id: valid_promotion_ids).uniq(&:promotion_id)
     end
 
+    # Returns the IDs of the valid promotions for the order
+    # @return [Array<Integer>]
     def valid_promotion_ids
-      all_adjustments.eligible.nonzero.promotion.map { |a| a.source.promotion_id }.uniq
+      all_adjustments.eligible.nonzero.promotion.promotion.eligible.nonzero.promotion.
+        joins("INNER JOIN #{Spree::PromotionAction.table_name} ON #{Spree::PromotionAction.table_name}.id = #{Spree::Adjustment.table_name}.source_id").
+        pluck("#{Spree::PromotionAction.table_name}.promotion_id").compact.uniq
     end
 
+    # Returns the valid coupon promotions for the order
+    # @return [Array<Spree::Promotion>]
     def valid_coupon_promotions
       promotions.
         where(id: valid_promotion_ids).
@@ -833,7 +860,7 @@ module Spree
     end
 
     # Returns item and whole order discount amount for Order
-    # without Shipment disccounts (eg. Free Shipping)
+    # without Shipment discounts (eg. Free Shipping)
     # @return [BigDecimal]
     def cart_promo_total
       all_adjustments.eligible.nonzero.promotion.
@@ -849,9 +876,13 @@ module Spree
     end
 
     def to_csv(_store = nil)
+      metafields_for_csv ||= Spree::MetafieldDefinition.for_resource_type('Spree::Order').order(:namespace, :key).map do |mf_def|
+        metafields.find { |mf| mf.metafield_definition_id == mf_def.id }&.csv_value
+      end
+
       csv_lines = []
       all_line_items.each_with_index do |line_item, index|
-        csv_lines << Spree::CSV::OrderLineItemPresenter.new(self, line_item, index).call
+        csv_lines << Spree::CSV::OrderLineItemPresenter.new(self, line_item, index, metafields_for_csv).call
       end
       csv_lines
     end
@@ -894,7 +925,7 @@ module Spree
           errors.add(:base, Spree.t(:items_cannot_be_shipped))
         end
 
-        return false
+        false
       end
     end
 
@@ -907,18 +938,21 @@ module Spree
         payments.completed.store_credits.each(&:void!)
       else
         payments.completed.each(&:cancel!)
+        payments.incomplete.not_store_credits.each(&:void_transaction!)
         payments.store_credits.pending.each(&:void!)
       end
 
       send_cancel_email
       update_with_updater!
       send_order_canceled_webhook
+      publish_order_canceled_event
     end
 
     def after_resume
       shipments.each(&:resume!)
       consider_risk
       send_order_resumed_webhook
+      publish_order_resumed_event
     end
 
     def use_billing?
@@ -953,8 +987,20 @@ module Spree
       if gift_card.present?
         recalculate_gift_card
       elsif using_store_credit?
-        Spree::Dependencies.checkout_add_store_credit_service.constantize.call(order: self)
+        Spree.checkout_add_store_credit_service.call(order: self)
       end
+    end
+
+    def publish_order_completed_event
+      publish_event('order.completed')
+    end
+
+    def publish_order_canceled_event
+      publish_event('order.canceled')
+    end
+
+    def publish_order_resumed_event
+      publish_event('order.resumed')
     end
   end
 end

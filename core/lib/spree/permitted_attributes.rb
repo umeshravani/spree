@@ -15,12 +15,16 @@ module Spree
       :gift_card_attributes,
       :gift_card_batch_attributes,
       :image_attributes,
+      :import_attributes,
+      :import_mapping_attributes,
       :integration_attributes,
       :inventory_unit_attributes,
       :invitation_attributes,
       :line_item_attributes,
       :menu_attributes,
       :menu_item_attributes,
+      :metafield_attributes,
+      :metafield_definition_attributes,
       :option_type_attributes,
       :option_value_attributes,
       :page_attributes,
@@ -29,6 +33,7 @@ module Spree
       :page_section_attributes,
       :payment_attributes,
       :payment_method_attributes,
+      :policy_attributes,
       :post_attributes,
       :post_category_attributes,
       :product_attributes,
@@ -63,6 +68,7 @@ module Spree
       :theme_attributes,
       :user_attributes,
       :variant_attributes,
+      :webhook_endpoint_attributes,
       :wishlist_attributes,
       :wished_item_attributes,
       :zone_attributes
@@ -83,7 +89,7 @@ module Spree
 
     @@checkout_attributes = [
       :coupon_code, :email, :shipping_method_id, :special_instructions, :use_billing, :use_shipping,
-      :user_id, :bill_address_id, :ship_address_id, :accept_marketing, :signup_for_an_account
+      :user_id, :bill_address_id, :ship_address_id, :accept_marketing, :signup_for_an_account, :currency
     ]
 
     @@classification_attributes = [
@@ -107,11 +113,15 @@ module Spree
 
     @@export_attributes = [:type, :format, :record_selection, :search_params]
 
-    @@gift_card_attributes = [:code, :amount, :expires_at, :user_id]
+    @@gift_card_attributes = [:code, :amount, :expires_at, :user_id, :currency]
 
-    @@gift_card_batch_attributes = [:prefix, :codes_count, :amount, :expires_at]
+    @@gift_card_batch_attributes = [:prefix, :codes_count, :amount, :expires_at, :currency]
 
     @@image_attributes = [:alt, :attachment, :position, :viewable_type, :viewable_id]
+
+    @@import_attributes = [:type, :attachment, :delimiter]
+
+    @@import_mapping_attributes = [:file_column]
 
     @@integration_attributes = [:type, :active]
 
@@ -125,6 +135,10 @@ module Spree
 
     @@menu_item_attributes = [:name, :subtitle, :destination, :new_window, :item_type,
                               :linked_resource_type, :linked_resource_id, :code, :menu_id]
+
+    @@metafield_attributes = [:id, :value, :type, :metafield_definition_id, :_destroy]
+
+    @@metafield_definition_attributes = [:key, :name, :namespace, :metafield_type, :resource_type, :display_on]
 
     @@option_type_attributes = [:name, :presentation, :position, :filterable,
                                 option_values_attributes: [:id, :name, :presentation, :position, :_destroy]]
@@ -142,6 +156,8 @@ module Spree
     @@payment_attributes = [:amount, :payment_method_id, :payment_method]
 
     @@payment_method_attributes = [:name, :type, :description, :active, :display_on, :auto_capture, :position]
+
+    @@policy_attributes = [:name, :slug, :body]
 
     @@post_attributes = [:title, :meta_title, :meta_description, :slug, :author_id, :post_category_id, :published_at, :content, :excerpt, :image, tag_list: []]
 
@@ -292,6 +308,8 @@ module Spree
         option_value_ids: []
       }
     ]
+
+    @@webhook_endpoint_attributes = [:url, :secret, :active, subscriptions: []]
 
     @@wishlist_attributes = [:name, :is_default, :is_private]
 

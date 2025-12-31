@@ -7,15 +7,13 @@ pin "@hotwired/stimulus-loading", to: "stimulus-loading.js"
 pin '@rails/actioncable', to: 'actioncable.esm.js', preload: ['application-spree-admin']
 pin '@rails/activestorage', to: 'activestorage.esm.js', preload: ['application-spree-admin']
 pin '@rails/actiontext', to: '@rails--actiontext@7.2.201.js', preload: ['application-spree-admin']
-pin 'trix', to: 'trix@2.1.12.js', preload: ['application-spree-admin']
+pin 'trix', to: 'trix@2.1.15.js', preload: ['application-spree-admin']
 
 pin 'sortablejs', preload: ['application-spree-admin'] # @1.15.6
 pin 'chartkick', to: 'chartkick.js', preload: ['application-spree-admin']
 pin 'Chart.bundle', to: 'Chart.bundle.js', preload: ['application-spree-admin']
 pin 'local-time', preload: ['application-spree-admin'] # @3.0.2
 pin 'mapkick/bundle', to: 'mapkick.bundle.js', preload: ['application-spree-admin']
-pin "jquery", to: 'jquery.min.js', preload: ['application-spree-admin'] # @3.7.1
-pin 'bootstrap', to: 'bootstrap--dist--js--bootstrap.bundle.min.js.js', preload: ['application-spree-admin'] # @4.6.2
 pin 'dompurify', preload: ['application-spree-admin'] # @3.2.5
 
 # Stimulus components
@@ -23,12 +21,11 @@ pin '@stimulus-components/rails-nested-form', to: '@stimulus-components--rails-n
 pin 'stimulus-notification', preload: ['application-spree-admin'] # @2.2.0
 pin 'stimulus-password-visibility', preload: ['application-spree-admin'] # @2.1.1
 pin 'stimulus-sortable', preload: ['application-spree-admin'] # @4.1.1
-pin 'stimulus-textarea-autogrow', preload: ['application-spree-admin'] # @4.1.0
 pin 'hotkeys-js', preload: ['application-spree-admin'] # @3.13.9
 pin 'stimulus-use', preload: ['application-spree-admin'] # @0.51.3
 pin 'stimulus-checkbox-select-all', preload: ['application-spree-admin'] # @5.3.0
 pin 'stimulus-clipboard', preload: ['application-spree-admin'] # @4.0.1
-pin "@stimulus-components/dropdown", to: "@stimulus-components--dropdown.js", preload: ['application-spree-admin'] # @3.0.0
+pin "@stimulus-components/dialog", to: "@stimulus-components--dialog.js", preload: ['application-spree-admin'] # @1.0.1
 
 # We can't vendor some of the javascript libraries
 # because they have relative imports in the code,
@@ -136,6 +133,35 @@ pin '@easepick/datetime',
 pin '@simonwep/pickr',
     to: '@simonwep--pickr.js',
     preload: ['application-spree-admin'] # @1.9.1
+
+# floating-ui
+pin "@floating-ui/dom", to: "@floating-ui--dom.js", preload: ['application-spree-admin'] # @1.7.4
+pin "@floating-ui/core", to: "@floating-ui--core.js", preload: ['application-spree-admin'] # @1.7.3
+pin "@floating-ui/utils", to: "@floating-ui--utils.js", preload: ['application-spree-admin'] # @0.2.10
+pin "@floating-ui/utils/dom", to: "@floating-ui--utils--dom.js", preload: ['application-spree-admin'] # @0.2.10
+
+# CodeMirror
+pin "@codemirror/commands", to: "@codemirror--commands.js" # @6.9.0
+pin "@codemirror/lang-json", to: "@codemirror--lang-json.js" # @6.0.2
+pin "@codemirror/language", to: "@codemirror--language.js" # @6.11.3
+pin "@codemirror/state", to: "@codemirror--state.js" # @6.5.2
+pin "@codemirror/view", to: "@codemirror--view.js" # @6.38.4
+pin "codemirror" # @6.0.2
+pin "@codemirror/autocomplete", to: "@codemirror--autocomplete.js" # @6.19.0
+pin "@codemirror/lint", to: "@codemirror--lint.js" # @6.9.0
+pin "@codemirror/search", to: "@codemirror--search.js" # @6.5.11
+pin "@lezer/common", to: "@lezer--common.js" # @1.2.3
+pin "@lezer/highlight", to: "@lezer--highlight.js" # @1.2.1
+pin "@lezer/json", to: "@lezer--json.js" # @1.0.3
+pin "@lezer/lr", to: "@lezer--lr.js" # @1.4.2
+pin "@marijn/find-cluster-break", to: "@marijn--find-cluster-break.js" # @1.0.2
+pin "crelt" # @1.0.6
+pin "style-mod" # @4.1.2
+pin "w3c-keyname" # @2.2.8
+
+# Highlight.js
+pin "@highlightjs/cdn-assets/es/core.min.js", to: "@highlightjs--cdn-assets--es--core.min.js.js" # @11.11.1
+pin "@highlightjs/cdn-assets/es/languages/json.min.js", to: "@highlightjs--cdn-assets--es--languages--json.min.js.js" # @11.11.1
 
 pin_all_from Spree::Admin::Engine.root.join('app/javascript/spree/admin/controllers'),
              under: 'spree/admin/controllers',

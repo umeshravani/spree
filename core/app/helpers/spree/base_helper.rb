@@ -198,14 +198,14 @@ module Spree
         params = "?#{params}" if params.present?
 
         "#{base_url + localize}/products/#{resource.slug}#{params}"
-      elsif resource.is_a?(Post)
+      elsif defined?(Spree::Post) && resource.is_a?(Spree::Post)
         preview_id = options[:preview_id].present? ? "?preview_id=#{options[:preview_id]}" : ''
         "#{base_url + localize}/posts/#{resource.slug}#{preview_id}"
       elsif resource.is_a?(Spree::Taxon)
         "#{base_url + localize}/t/#{resource.permalink}"
-      elsif resource.is_a?(Spree::Page) || resource.is_a?(ActionText::RichText)
+      elsif defined?(Spree::Page) && (resource.is_a?(Spree::Page) || resource.is_a?(Spree::Policy))
         "#{base_url + localize}#{resource.page_builder_url}"
-      elsif resource.is_a?(Spree::PageLink)
+      elsif defined?(Spree::PageLink) && resource.is_a?(Spree::PageLink)
         resource.linkable_url
       elsif localize.blank?
         base_url
@@ -238,7 +238,7 @@ module Spree
         I18n.locale,
         (current_currency if defined?(current_currency)),
         defined?(try_spree_current_user) && try_spree_current_user.present?,
-        defined?(try_spree_current_user) && try_spree_current_user.try(:has_spree_role?, 'admin')
+        defined?(try_spree_current_user) && try_spree_current_user.respond_to?(:role_users) && try_spree_current_user.role_users.cache_key_with_version
       ].compact
     end
 
@@ -251,8 +251,14 @@ module Spree
     end
 
     def payment_method_icon_tag(payment_method, opts = {})
-      image_tag "payment_icons/#{payment_method}.svg", opts
-    rescue Sprockets::Rails::Helper::AssetNotFound
+      return '' unless defined?(inline_svg)
+
+      opts[:width] ||= opts[:height] * 1.5 if opts[:height]
+      opts[:size] = "#{opts[:width]}x#{opts[:height]}" if opts[:width] && opts[:height]
+
+      opts[:fallback] = 'payment_icons/storecredit.svg'
+
+      inline_svg "payment_icons/#{payment_method}.svg", opts
     end
 
     private

@@ -53,10 +53,10 @@ module Spree
         # serializers
         storefront_address_serializer: 'Spree::V2::Storefront::AddressSerializer',
         storefront_cart_serializer: 'Spree::V2::Storefront::CartSerializer',
-        storefront_cms_page_serializer: 'Spree::V2::Storefront::CmsPageSerializer', # LEGACY
+        storefront_cms_page_serializer: nil, # LEGACY
         storefront_credit_card_serializer: 'Spree::V2::Storefront::CreditCardSerializer',
         storefront_country_serializer: 'Spree::V2::Storefront::CountrySerializer',
-        storefront_menu_serializer: 'Spree::V2::Storefront::MenuSerializer', # LEGACY
+        storefront_menu_serializer: nil, # LEGACY
         storefront_user_serializer: 'Spree::V2::Storefront::UserSerializer',
         storefront_shipment_serializer: 'Spree::V2::Storefront::ShipmentSerializer',
         storefront_taxon_serializer: 'Spree::V2::Storefront::TaxonSerializer',
@@ -65,14 +65,40 @@ module Spree
         storefront_product_serializer: 'Spree::V2::Storefront::ProductSerializer',
         storefront_estimated_shipment_serializer: 'Spree::V2::Storefront::EstimatedShippingRateSerializer',
         storefront_store_serializer: 'Spree::V2::Storefront::StoreSerializer',
+        storefront_policy_serializer: 'Spree::V2::Storefront::PolicySerializer',
         storefront_order_serializer: 'Spree::V2::Storefront::OrderSerializer',
         storefront_variant_serializer: 'Spree::V2::Storefront::VariantSerializer',
+        storefront_image_serializer: 'Spree::V2::Storefront::ImageSerializer',
+        storefront_line_item_serializer: 'Spree::V2::Storefront::LineItemSerializer',
+        storefront_option_type_serializer: 'Spree::V2::Storefront::OptionTypeSerializer',
+        storefront_option_value_serializer: 'Spree::V2::Storefront::OptionValueSerializer',
+        storefront_post_category_serializer: 'Spree::V2::Storefront::PostCategorySerializer',
+        storefront_post_serializer: 'Spree::V2::Storefront::PostSerializer',
+        storefront_product_property_serializer: 'Spree::V2::Storefront::ProductPropertySerializer',
+        storefront_order_promotion_serializer: 'Spree::V2::Storefront::OrderPromotionSerializer',
+        storefront_shipping_method_serializer: 'Spree::V2::Storefront::ShippingMethodSerializer',
+        storefront_shipping_rate_serializer: 'Spree::V2::Storefront::ShippingRateSerializer',
+        storefront_stock_location_serializer: 'Spree::V2::Storefront::StockLocationSerializer',
+        storefront_store_credit_category_serializer: 'Spree::V2::Storefront::StoreCreditCategorySerializer',
+        storefront_store_credit_event_serializer: 'Spree::V2::Storefront::StoreCreditEventSerializer',
+        storefront_store_credit_type_serializer: 'Spree::V2::Storefront::StoreCreditTypeSerializer',
+        storefront_digital_link_serializer: 'Spree::V2::Storefront::DigitalLinkSerializer',
+        storefront_gift_card_serializer: 'Spree::V2::Storefront::GiftCardSerializer',
+        storefront_taxonomy_serializer: 'Spree::V2::Storefront::TaxonomySerializer',
+        storefront_taxon_image_serializer: 'Spree::V2::Storefront::TaxonImageSerializer',
+        storefront_wishlist_serializer: 'Spree::V2::Storefront::WishlistSerializer',
+        storefront_wished_item_serializer: 'Spree::V2::Storefront::WishedItemSerializer',
+        storefront_metafield_serializer: 'Spree::V2::Storefront::MetafieldSerializer',
+
+        # platform serializers
+        platform_metafield_serializer: 'Spree::Api::V2::Platform::MetafieldSerializer',
 
         # sorters
         storefront_collection_sorter: -> { Spree::Dependencies.collection_sorter },
         storefront_order_sorter: -> { Spree::Dependencies.collection_sorter },
         storefront_products_sorter: -> { Spree::Dependencies.products_sorter },
         platform_products_sorter: -> { Spree::Dependencies.products_sorter },
+        storefront_posts_sorter: -> { Spree::Dependencies.posts_sorter },
 
         # paginators
         storefront_collection_paginator: -> { Spree::Dependencies.collection_paginator },
@@ -87,6 +113,7 @@ module Spree
         storefront_credit_card_finder: -> { Spree::Dependencies.credit_card_finder },
         storefront_find_by_variant_finder: -> { Spree::Dependencies.line_item_by_variant_finder },
         storefront_products_finder: -> { Spree::Dependencies.products_finder },
+        storefront_posts_finder: -> { Spree::Dependencies.posts_finder },
         storefront_taxon_finder: -> { Spree::Dependencies.taxon_finder },
         storefront_variant_finder: -> { Spree::Dependencies.variant_finder },
 

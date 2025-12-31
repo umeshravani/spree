@@ -4,13 +4,13 @@ module Spree
       include Spree::ImagesHelper
 
       def available_stores
-        @available_stores ||= Spree::Store.accessible_by(current_ability).includes(:logo_attachment, :favicon_image_attachment, :default_custom_domain)
+        @available_stores ||= Spree::Store.accessible_by(current_ability, :manage).includes(:logo_attachment, :favicon_image_attachment, :default_custom_domain)
       end
 
       DEFAULT_ICON_SIZE = 40
 
       def store_admin_icon(store, opts = {})
-        opts[:class] ||= 'rounded-sm bg-white border'
+        opts[:class] ||= 'rounded-md bg-white border store-icon'
         opts[:height] ||= DEFAULT_ICON_SIZE
         opts[:width] ||= DEFAULT_ICON_SIZE
 
@@ -33,7 +33,7 @@ module Spree
         opts[:height] ||= DEFAULT_ICON_SIZE
         opts[:width] ||= DEFAULT_ICON_SIZE
         opts[:class] ||= ''
-        opts[:class] += ' rounded text-dark d-flex align-items-center justify-content-center bg-gray-200'
+        opts[:class] += ' store-icon rounded-lg  text-gray-900 flex items-center justify-center'
         content_tag(:span, name[0].upcase, class: opts[:class], style: "height: #{opts[:height]}px; width: #{opts[:width]}px;")
       end
     end

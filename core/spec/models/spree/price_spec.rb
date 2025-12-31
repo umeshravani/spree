@@ -1,6 +1,8 @@
 require 'spec_helper'
 
 describe Spree::Price, type: :model do
+  it_behaves_like 'lifecycle events'
+
   describe 'Callbacks' do
     context 'when compare_at_amount is equal to amount' do
       let(:variant) { create(:variant) }
@@ -96,7 +98,7 @@ describe Spree::Price, type: :model do
   end
 
   describe '#compare_at_amount=' do
-    let(:price) { build :price }
+    let(:price) { build(:price) }
     let(:compare_at_amount) { '169.99' }
 
     before do
@@ -105,6 +107,14 @@ describe Spree::Price, type: :model do
 
     it 'is expected to equal to localized number' do
       expect(price.compare_at_amount).to eq(Spree::LocalizedNumber.parse(compare_at_amount))
+    end
+
+    context 'with empty string being passed as value' do
+      let(:compare_at_amount) { '' }
+
+      it 'casts value to nil' do
+        expect(price.compare_at_amount).to be_nil
+      end
     end
   end
 

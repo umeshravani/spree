@@ -2,6 +2,8 @@ module Spree
   module V2
     module Storefront
       class CartSerializer < BaseSerializer
+        include Spree::Api::V2::PublicMetafieldsConcern
+
         set_type :cart
 
         attributes :number, :item_total, :total, :ship_total, :adjustment_total, :created_at,
@@ -40,25 +42,25 @@ module Spree
           cart.display_total_minus_store_credits.amount_in_cents
         end
 
-        has_many   :line_items
-        has_many   :variants
-        has_many   :promotions, object_method_name: :valid_promotions, id_method_name: :valid_promotion_ids
-        has_many   :payments do |cart|
+        has_many   :line_items, serializer: Spree.api.storefront_line_item_serializer
+        has_many   :variants, serializer: Spree.api.storefront_variant_serializer
+        has_many   :promotions, serializer: Spree.api.storefront_order_promotion_serializer, object_method_name: :valid_promotions, id_method_name: :valid_promotion_ids
+        has_many   :payments, serializer: Spree.api.storefront_payment_serializer do |cart|
           cart.payments.valid
         end
-        has_many   :shipments
+        has_many   :shipments, serializer: Spree.api.storefront_shipment_serializer
 
-        belongs_to :user
+        belongs_to :user, serializer: Spree.api.storefront_user_serializer
         belongs_to :billing_address,
                    id_method_name: :bill_address_id,
-                   serializer: :address,
+                   serializer: Spree.api.storefront_address_serializer,
                    record_type: :address
 
         belongs_to :shipping_address,
                    id_method_name: :ship_address_id,
-                   serializer: :address,
+                   serializer: Spree.api.storefront_address_serializer,
                    record_type: :address
-        belongs_to :gift_card, serializer: :gift_card
+        belongs_to :gift_card, serializer: Spree.api.storefront_gift_card_serializer
       end
     end
   end

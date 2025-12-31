@@ -7,15 +7,15 @@ module Spree
       # @param [String, nil] icon Optional icon name to prepend to the label
       # @param [Boolean, nil] active Whether the link should be marked as active
       # @return [SafeBuffer] The navigation item HTML
-      def nav_item(label = nil, url, icon: nil, active: nil, data: {})
+      def nav_item(label = nil, url, icon: nil, active: nil, data: {}, **options)
         content_tag :li, class: 'nav-item', role: 'presentation' do
           if block_given?
-            active_link_to url, class: 'nav-link', active: active, data: data do
+            active_link_to url, class: 'nav-link', active: active, data: data, **options do
               yield
             end
           else
             label = icon(icon) + label if icon.present? && label.present?
-            active_link_to label, url, class: 'nav-link', active: active, data: data
+            active_link_to label, url, class: 'nav-link', active: active, data: data, **options
           end
         end
       end
@@ -39,17 +39,18 @@ module Spree
           per_page_default * 8
         ]
 
-        selected_option = (params[:per_page].try(:to_i) || per_page_default).to_s
+        selected_option = (params[:per_page].try(:to_i) || per_page_default).to_i
+        selected_option_label = selected_option.to_s + icon('chevron-down', class: 'ml-1 mr-0 arrow')
 
-        selected_option += icon('chevron-down', class: 'ml-1 mr-0 arrow')
-
-        content_tag :div, id: 'per-page-dropdown' do
-          button_tag(raw(selected_option), class: 'btn btn-light btn-sm', data: { toggle: 'dropdown', expanded: false }) +
-            content_tag(:div, class: 'dropdown-menu') do
-              per_page_options.map do |option|
-                link_to option, per_page_dropdown_params(option), class: "dropdown-item #{'active' if option.to_i == selected_option.to_i}"
-              end.join.html_safe
-            end
+        dropdown(id: 'per-page-dropdown', portal: false) do
+          dropdown_toggle(class: 'btn-light btn-sm') do
+            raw(selected_option_label)
+          end +
+          dropdown_menu(direction: 'top-left') do
+            per_page_options.map do |option|
+              link_to option, per_page_dropdown_params(option), class: "dropdown-item #{'active' if option.to_i == selected_option}"
+            end.join.html_safe
+          end
         end
       end
 
@@ -107,24 +108,36 @@ module Spree
       # @param options [Hash] the options for the link
       # @return [String] the link with the icon
       def link_to_with_icon(icon_name, text, url, options = {})
-        options[:class] ||= (options[:class].to_s + " with-tip").strip
-        options[:title] ||= text if options[:no_text]
         no_text = options[:no_text]
-        label = options[:no_text] ? '' : content_tag(:span, text)
+        tooltip_text = options[:title] || (no_text ? text : nil)
         options.delete(:no_text)
+        options.delete(:title) if tooltip_text
+
+        if tooltip_text
+          options[:data] ||= {}
+          options[:data][:controller] = 'tooltip'
+        end
+
+        label = no_text ? '' : content_tag(:span, text)
 
         if icon_name
           icon = icon(icon_name, class: "icon icon-#{icon_name} #{text.blank? || no_text ? 'mr-0' : ''}")
           text = "#{icon} #{label}"
         end
-        link_to(text.html_safe, url, options)
+
+        link_content = text.html_safe
+        link_content += tooltip(tooltip_text) if tooltip_text
+
+        link_to(link_content, url, options)
       end
 
       def link_to_export_modal
-        link_to '#', data: { toggle: 'modal', target: '#export-modal' }, class: 'btn btn-light' do
+        return unless can?(:create, Spree::Export)
+
+        button_tag(type: 'button', class: 'btn btn-light', data: { action: 'click->export-dialog#open' }) do
           icon('table-export', class: 'mr-0 mr-lg-2') +
-          content_tag(:span, Spree.t(:export), class: 'd-none d-lg-inline')
-        end if can?(:create, Spree::Export)
+          content_tag(:span, Spree.t(:export), class: 'hidden lg:inline')
+        end
       end
 
       # renders an active link with an icon, using the active_link_to method from https://github.com/comfy/active_link_to gem
@@ -134,17 +147,27 @@ module Spree
       # @param options [Hash] the options for the link
       # @return [String] the active link with the icon
       def active_link_to_with_icon(icon_name, text, url, options = {})
-        options[:class] = (options[:class].to_s + " with-tip").strip
-        options[:title] = text if options[:no_text]
         no_text = options[:no_text]
-        label = options[:no_text] ? '' : content_tag(:span, text)
+        tooltip_text = options[:title] || (no_text ? text : nil)
         options.delete(:no_text)
+        options.delete(:title) if tooltip_text
+
+        if tooltip_text
+          options[:data] ||= {}
+          options[:data][:controller] = 'tooltip'
+        end
+
+        label = no_text ? '' : content_tag(:span, text)
 
         if icon_name
           icon = icon(icon_name, class: "icon icon-#{icon_name}")
           text = "#{icon} #{label}"
         end
-        active_link_to(text.html_safe, url, options)
+
+        link_content = text.html_safe
+        link_content += tooltip(tooltip_text) if tooltip_text
+
+        active_link_to(link_content, url, options)
       end
 
       # renders a button with an icon (optional)
@@ -166,7 +189,7 @@ module Spree
           options.merge(
             type: button_type,
             class: "btn #{css_classes}",
-            'data-turbo-submits-with' => content_tag(:span, '', class: 'spinner-border spinner-border-sm', role: 'status')
+            'data-turbo-submits-with' => content_tag(:span, '', class: 'inline-block w-4 h-4 border-2 border-current border-r-transparent rounded-full animate-spin', role: 'status')
           )
         )
       end
@@ -224,8 +247,8 @@ module Spree
           url = session[session_key] if session[session_key].present?
         end
 
-        link_to url, class: 'd-flex align-items-center text-decoration-none' do
-          content_tag(:span, icon('chevron-left', class: 'mr-0'), class: 'btn hover-gray px-2 d-flex align-items-center') +
+        link_to url, class: 'flex items-center no-underline' do
+          content_tag(:span, icon('chevron-left', class: 'mr-0'), class: 'btn hover:bg-gray-100 shadow-none px-2 flex items-center shadow-none') +
             content_tag(:span, label, class: 'font-size-base text-black')
         end
       end
@@ -238,7 +261,7 @@ module Spree
       def external_link_to(label, url, opts = {}, &block)
         opts[:target] ||= :blank
         opts[:rel] ||= :nofollow
-        opts[:class] ||= "d-inline-flex align-items-center text-blue text-decoration-none"
+        opts[:class] ||= "inline-flex items-center text-blue-500 no-underline hover:text-blue-600 hover:bg-blue-50 p-1 rounded"
 
         if block_given?
           link_to url, opts, &block
@@ -275,16 +298,61 @@ module Spree
       # @param placement [String] the placement of the help bubble
       # @param css [String] the css class of the help bubble
       # @return [String] the help bubble with the icon
-      def help_bubble(text = '', placement = 'bottom', css: nil)
-        css ||= 'text-muted opacity-75 cursor-default'
-        content_tag :small, icon('info-square-rounded', class: css), data: { placement: placement }, class: "with-tip #{css}", title: text
+      def help_bubble(text = '', placement = 'top', css: nil)
+        css ||= 'text-gray-500 cursor-default opacity-75'
+        content_tag :span, data: { controller: 'tooltip', tooltip_placement_value: placement } do
+          icon('info-square-rounded', class: css) + tooltip(text)
+        end
       end
 
       def render_breadcrumb_icon
-        if settings_active?
+        if settings_area?
           icon('settings')
         elsif @breadcrumb_icon
           icon(@breadcrumb_icon)
+        end
+      end
+
+      # Renders the navigation for the given context
+      # @param context [Symbol] the navigation context (:sidebar, :settings, etc.)
+      # @param options [Hash] additional options for rendering
+      # @return [String] the rendered navigation HTML
+      def render_navigation(context = :sidebar, **options)
+        return '' if Spree::Admin::RuntimeConfig.legacy_sidebar_navigation
+
+        items = navigation_items(context)
+        return '' if items.empty?
+
+        render 'spree/admin/shared/navigation',
+               items: items,
+               context: context,
+               **options
+      end
+
+      # Get navigation items for the given context
+      # @param context [Symbol] the navigation context
+      # @return [Array<Spree::Admin::Navigation::Item>] the visible navigation items
+      def navigation_items(context = :sidebar)
+        # Pass the view context (self) so that can? and other helpers are available
+        Spree.admin.navigation.send(context)&.visible_items(self) || []
+      end
+
+      # Renders page tab navigation for the given context
+      # @param context [Symbol] the navigation context (:tax_tabs, :shipping_tabs, etc.)
+      # @param options [Hash] additional options for rendering
+      # @return [String] the rendered tab navigation HTML wrapped in content_for(:page_tabs)
+      def render_tab_navigation(context, **options)
+        items = navigation_items(context)
+        return '' if items.empty?
+
+        content_for :page_tabs do
+          items.map do |item|
+            item_url = item.resolve_url(self)
+            item_label = item.resolve_label
+            is_active = item.active?(request.path, self)
+
+            nav_item(item_label, item_url, active: is_active)
+          end.join.html_safe
         end
       end
     end

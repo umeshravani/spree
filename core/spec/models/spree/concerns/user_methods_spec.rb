@@ -2,6 +2,7 @@ require 'spec_helper'
 
 describe Spree::UserMethods do
   let(:test_user) { create :user }
+  let!(:another_user) { create(:user) }
   let(:current_store) { @default_store }
 
   describe '#last_incomplete_spree_order' do
@@ -57,16 +58,6 @@ describe Spree::UserMethods do
       end
     end
   end
-
-  context 'when user destroyed with approved orders' do
-    let(:order) { create(:order, approver_id: test_user.id, created_at: 1.day.ago) }
-
-    it 'nullifies all approver ids' do
-      expect(test_user).to receive(:nullify_approver_id_in_approved_orders)
-      test_user.destroy
-    end
-  end
-
   describe '#payment_sources' do
     subject { test_user.payment_sources }
 
@@ -128,31 +119,70 @@ describe Spree::UserMethods do
     let!(:user_1) { create(:user, email: 'john.doe@example.com', first_name: 'John', last_name: 'Doe') }
     let!(:user_2) { create(:user, email: 'jane.doe@example.com', first_name: 'Jane', last_name: 'Gone') }
     let!(:user_3) { create(:user, email: 'mary.moe@example.com', first_name: 'Mary', last_name: 'Moe') }
+    let!(:user_4) { create(:user, email: 'john_doe@example.com', first_name: 'Ayn', last_name: 'Rand') }
+    let!(:user_5) { create(:user, email: 'johndoe@example.com', first_name: 'John', last_name: 'Doe') }
 
     it 'returns users based on an email' do
       expect(Spree.user_class.multi_search('john.doe@example.com')).to eq([user_1])
       expect(Spree.user_class.multi_search('jane.doe@example.com')).to eq([user_2])
+      expect(Spree.user_class.multi_search('john_doe@example.com')).to eq([user_4])
+      expect(Spree.user_class.multi_search('johndoe@example.com')).to eq([user_5])
       expect(Spree.user_class.multi_search('mary.moe@')).to eq([])
     end
 
     it 'returns users based on the first name' do
-      expect(Spree.user_class.multi_search('joh')).to eq([user_1])
+      expect(Spree.user_class.multi_search('joh')).to eq([user_1, user_5])
       expect(Spree.user_class.multi_search('jan')).to eq([user_2])
       expect(Spree.user_class.multi_search('greg')).to eq([])
     end
 
     it 'returns users based on the last name' do
-      expect(Spree.user_class.multi_search('do')).to eq([user_1])
+      expect(Spree.user_class.multi_search('do')).to eq([user_1, user_5])
       expect(Spree.user_class.multi_search('moe')).to eq([user_3])
       expect(Spree.user_class.multi_search('smith')).to eq([])
     end
 
     it 'returns users based on the full name' do
-      expect(Spree.user_class.multi_search('joh do')).to eq([user_1])
+      expect(Spree.user_class.multi_search('joh do')).to eq([user_1, user_5])
       expect(Spree.user_class.multi_search('ane gon')).to eq([user_2])
       expect(Spree.user_class.multi_search('mary moe')).to eq([user_3])
       expect(Spree.user_class.multi_search('jane moe')).to eq([user_2, user_3])
       expect(Spree.user_class.multi_search('greg smith')).to eq([])
+    end
+  end
+
+  describe '#can_be_deleted?' do
+    subject { test_user.can_be_deleted? }
+
+    context 'when user has a role on current store' do
+      let!(:role) { create(:role, name: 'test') }
+
+      it 'returns true if another user also has a role on the store' do
+        test_user.add_role(role.name, current_store)
+        other_user = create(:user)
+        other_user.add_role(role.name, current_store)
+
+        expect(subject).to be(true)
+      end
+
+      it 'returns false if user is the last with a role on the store' do
+        current_store.role_users.destroy_all
+        test_user.add_role(role.name, current_store)
+
+        expect(subject).to be(false)
+      end
+    end
+
+    context 'when user has no role on current store' do
+      it 'returns true if user has no completed orders' do
+        expect(subject).to be(true)
+      end
+
+      it 'returns false if user has completed orders' do
+        create(:order, user: test_user, completed_at: Time.current)
+
+        expect(subject).to be(false)
+      end
     end
   end
 end

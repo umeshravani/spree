@@ -41,6 +41,7 @@ module Spree
         # order
         order_approve_service: 'Spree::Orders::Approve',
         order_cancel_service: 'Spree::Orders::Cancel',
+        order_updater: 'Spree::OrderUpdater',
 
         # shipment
         shipment_change_state_service: 'Spree::Shipments::ChangeState',
@@ -56,6 +57,7 @@ module Spree
         collection_sorter: 'Spree::BaseSorter',
         order_sorter: 'Spree::BaseSorter',
         products_sorter: 'Spree::Products::Sort',
+        posts_sorter: 'Spree::Posts::Sort',
 
         # paginator
         collection_paginator: 'Spree::Shared::Paginate',
@@ -95,13 +97,14 @@ module Spree
         # finders
         address_finder: 'Spree::Addresses::Find',
         country_finder: 'Spree::Countries::Find',
-        cms_page_finder: 'Spree::CmsPages::Find', # LEGACY
-        menu_finder: 'Spree::Menus::Find', # LEGACY
+        cms_page_finder: nil, # LEGACY
+        menu_finder: nil, # LEGACY
         current_order_finder: 'Spree::Orders::FindCurrent',
         current_store_finder: 'Spree::Stores::FindCurrent',
         completed_order_finder: 'Spree::Orders::FindComplete',
         credit_card_finder: 'Spree::CreditCards::Find',
         products_finder: 'Spree::Products::Find',
+        posts_finder: 'Spree::Posts::Find',
         taxon_finder: 'Spree::Taxons::Find',
         line_item_by_variant_finder: 'Spree::LineItems::FindByVariant',
         variant_finder: 'Spree::Variants::Find'

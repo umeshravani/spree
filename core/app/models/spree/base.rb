@@ -3,6 +3,7 @@ class Spree::Base < ApplicationRecord
   include Spree::RansackableAttributes
   include Spree::TranslatableResourceScopes
   include Spree::IntegrationsConcern
+  include Spree::Publishable
 
   after_initialize do
     if has_attribute?(:preferences) && !preferences.nil?
@@ -87,7 +88,7 @@ class Spree::Base < ApplicationRecord
 
   # Try building a slug based on the following fields in increasing order of specificity.
   def slug_candidates
-    if defined?(:deleted_at) && deleted_at.present?
+    if defined?(deleted_at) && deleted_at.present?
       [
         ['deleted', :name],
         ['deleted', :name, :uuid_for_friendly_id]

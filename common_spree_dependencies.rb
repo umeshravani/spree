@@ -4,7 +4,7 @@
 source 'https://rubygems.org'
 
 gem 'tzinfo-data', platforms: [:mingw, :mswin, :x64_mingw]
-gem 'rails', ENV.fetch('RAILS_VERSION', '~> 8.0.0'), require: false
+gem 'rails', ENV.fetch('RAILS_VERSION', '~> 8.1.0'), require: false
 
 platforms :jruby do
   gem 'jruby-openssl'
@@ -16,8 +16,6 @@ platforms :ruby do
 
   gem 'sqlite3', '>= 2.0'
 end
-
-gem 'sprockets-rails', '>= 3.5.2'
 
 group :test do
   gem 'capybara'
@@ -39,6 +37,7 @@ group :test do
   gem 'timecop'
   gem 'test-prof'
   gem 'rails-controller-testing'
+  gem 'shoulda-matchers', '~> 6.0'
 end
 
 group :test, :development do
@@ -53,6 +52,9 @@ group :test, :development do
   gem 'pry-byebug'
   gem 'puma'
   gem 'ffaker'
+
+  # Ruby 3.4+ removed observer from stdlib
+  gem 'observer'
 end
 
 group :development do

@@ -1,7 +1,7 @@
 module Spree
   module Admin
     class ZonesController < ResourceController
-      add_breadcrumb Spree.t(:zones), :admin_zones_path
+      include Spree::Admin::SettingsConcern
       before_action :load_data, except: :index
 
       def new
@@ -12,13 +12,6 @@ module Spree
 
       def location_after_save
         edit_object_url(@object, states_country_id: @selected_country&.id)
-      end
-
-      def collection
-        params[:q] ||= {}
-        params[:q][:s] ||= 'name asc'
-        @search = super.ransack(params[:q])
-        @zones = @search.result.page(params[:page]).per(params[:per_page])
       end
 
       def load_data

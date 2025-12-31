@@ -78,6 +78,42 @@ describe Spree::Taxon, type: :model do
         end
       end
     end
+
+    describe '.with_matching_name' do
+      let!(:taxon1) { create(:taxon, name: 'shoes', taxonomy: taxonomy) }
+      let!(:taxon2) { create(:taxon, name: 'Premium Shoes', taxonomy: taxonomy) }
+
+      it 'returns the taxon with the matching name', :aggregate_failures do
+        expect(described_class.with_matching_name('SHOES')).to eq([taxon1])
+        expect(described_class.with_matching_name('Shoes')).to eq([taxon1])
+        expect(described_class.with_matching_name('shoes')).to eq([taxon1])
+
+        expect(described_class.with_matching_name('premium SHOES')).to eq([taxon2])
+        expect(described_class.with_matching_name('Premium shoes')).to eq([taxon2])
+        expect(described_class.with_matching_name('premium shoes')).to eq([taxon2])
+      end
+
+      context 'with translations' do
+        before do
+          I18n.with_locale(:pl) do
+            taxon1.update!(name: 'Buty')
+            taxon2.update!(name: 'Buty Premium')
+          end
+        end
+
+        it 'returns the taxon with the matching name', :aggregate_failures do
+          I18n.with_locale(:pl) do
+            expect(described_class.with_matching_name('BUTY')).to eq([taxon1])
+            expect(described_class.with_matching_name('Buty')).to eq([taxon1])
+            expect(described_class.with_matching_name('buty')).to eq([taxon1])
+
+            expect(described_class.with_matching_name('Buty PREMIUM')).to eq([taxon2])
+            expect(described_class.with_matching_name('Buty premium')).to eq([taxon2])
+            expect(described_class.with_matching_name('buty premium')).to eq([taxon2])
+          end
+        end
+      end
+    end
   end
 
   describe 'callbacks' do
@@ -122,16 +158,6 @@ describe Spree::Taxon, type: :model do
 
           create(:tag_taxon_rule, taxon: taxon, value: 'tag')
         end
-      end
-    end
-
-    describe 'after_destroy :remove_all_featured_sections' do
-      let(:taxon) { create(:taxon) }
-      let!(:featured_section) { create(:featured_taxon_page_section, preferred_taxon_id: taxon.id) }
-
-      it 'removes the associated featured section' do
-        expect { taxon.destroy! }.to change(Spree::PageSections::FeaturedTaxon, :count).from(3).to(2)
-        expect(featured_section.reload).to be_deleted
       end
     end
   end
@@ -761,75 +787,6 @@ describe Spree::Taxon, type: :model do
           end
         end
       end
-    end
-  end
-
-  describe '#featured?' do
-    subject { taxon.featured? }
-
-    let(:taxon) { create(:taxon) }
-    let!(:featured_section) { create(:featured_taxon_page_section, preferred_taxon_id: featured_taxon.id) }
-
-    context 'with a featured section' do
-      let(:featured_taxon) { taxon }
-
-      it { is_expected.to be(true) }
-    end
-
-    context 'with no featured section' do
-      let(:featured_taxon) { create(:taxon) }
-
-      it { is_expected.to be(false) }
-    end
-  end
-
-  describe '#page_builder_image' do
-    subject(:page_builder_image) { taxon.page_builder_image }
-
-    let(:taxon) { build(:taxon, image: image, square_image: square_image) }
-
-    context 'when image and square image are not attached' do
-      let(:image) { nil }
-      let(:square_image) { nil }
-
-      it { is_expected.to_not be_attached }
-    end
-
-    context 'when only image is attached' do
-      let(:image) { file_fixture('icon_256x256.png') }
-      let(:square_image) { nil }
-
-      it { is_expected.to be_attached }
-      it { is_expected.to eq(taxon.image)}
-    end
-
-    context 'when both image and square image are attached' do
-      let(:image) { file_fixture('icon_256x256.png') }
-      let(:square_image) { file_fixture('icon_256x256.png') }
-
-      it { is_expected.to be_attached}
-      it { is_expected.to eq(taxon.square_image)}
-    end
-  end
-
-  describe '#featured_sections' do
-    subject { taxon.featured_sections }
-
-    let(:taxon) { create(:taxon) }
-
-    let!(:featured_sections) { create_list(:featured_taxon_page_section, 2, preferred_taxon_id: featured_taxon.id) }
-    let!(:other_featured_sections) { create_list(:featured_taxon_page_section, 2, preferred_taxon_id: create(:taxon).id) }
-
-    context 'with featured sections' do
-      let(:featured_taxon) { taxon }
-
-      it { is_expected.to contain_exactly(*featured_sections) }
-    end
-
-    context 'with no featured sections' do
-      let(:featured_taxon) { create(:taxon) }
-
-      it { is_expected.to be_empty }
     end
   end
 end

@@ -3,6 +3,10 @@ module Spree
     include Spree::SingleStoreResource
     include Spree::VendorConcern if defined?(Spree::VendorConcern)
 
+    # Set event prefix for all Report subclasses
+    # This ensures Spree::Reports::SalesTotal publishes 'report.create' not 'sales_total.create'
+    self.event_prefix = 'report'
+
     #
     # Associations
     #
@@ -13,7 +17,7 @@ module Spree
     # Callbacks
     #
     after_initialize :set_default_values
-    after_commit :generate_async, on: :create
+    # NOTE: generate_async is now handled by Spree::ReportSubscriber listening to 'report.create' event
 
     #
     # Validations
@@ -24,6 +28,10 @@ module Spree
     # Attachments
     #
     has_one_attached :attachment, service: Spree.private_storage_service_name
+
+    def self.report_type
+      name.demodulize.underscore
+    end
 
     # Returns a scope of records to be used for generating report lines
     #
@@ -43,7 +51,11 @@ module Spree
     end
 
     def to_partial_path
-      "spree/admin/reports/report"
+      'spree/admin/reports/report'
+    end
+
+    def no_report_data_partial_path
+      'spree/admin/reports/no_report_data'
     end
 
     def human_name

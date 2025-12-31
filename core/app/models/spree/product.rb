@@ -28,6 +28,7 @@ module Spree
     include Spree::MultiStoreResource
     include Spree::TranslatableResource
     include Spree::MemoizedData
+    include Spree::Metafields
     include Spree::Metadata
     include Spree::Product::Webhooks
     include Spree::Product::Slugs
@@ -38,7 +39,7 @@ module Spree
     MEMOIZED_METHODS = %w[total_on_hand taxonomy_ids taxon_and_ancestors category
                           default_variant_id tax_category default_variant
                           default_image secondary_image
-                          purchasable? in_stock? backorderable? has_variants?]
+                          purchasable? in_stock? backorderable? has_variants? digital?]
 
     STATUS_TO_WEBHOOK_EVENT = {
       'active' => 'activated',
@@ -81,6 +82,7 @@ module Spree
 
     belongs_to :tax_category, class_name: 'Spree::TaxCategory'
     belongs_to :shipping_category, class_name: 'Spree::ShippingCategory', inverse_of: :products
+    has_many :shipping_methods, through: :shipping_category, class_name: 'Spree::ShippingMethod'
 
     has_one :master,
             -> { where is_master: true },
@@ -116,8 +118,6 @@ module Spree
     has_many :store_products, class_name: 'Spree::StoreProduct'
     has_many :stores, through: :store_products, class_name: 'Spree::Store'
     has_many :digitals, through: :variants_including_master
-
-    has_many :page_links, as: :linkable, class_name: 'Spree::PageLink', dependent: :destroy
 
     after_initialize :ensure_master
     after_initialize :assign_default_tax_category
@@ -203,10 +203,12 @@ module Spree
                          }
 
     scope :by_best_selling, lambda { |order_direction = :desc|
-      left_joins(:orders).
-        select("#{Spree::Product.table_name}.*, COUNT(#{Spree::Order.table_name}.id) AS completed_orders_count, SUM(#{Spree::Order.table_name}.total) AS completed_orders_total").
-        where(Spree::Order.table_name => { id: nil }).
-        or(where.not(Spree::Order.table_name => { completed_at: nil })).
+      left_joins(variants_including_master: { line_items: :order }).
+        select(
+          "#{Spree::Product.table_name}.*",
+          "COUNT(DISTINCT CASE WHEN #{Spree::Order.table_name}.completed_at IS NOT NULL THEN #{Spree::Order.table_name}.id END) AS completed_orders_count",
+          "COALESCE(SUM(CASE WHEN #{Spree::Order.table_name}.completed_at IS NOT NULL THEN (#{Spree::LineItem.table_name}.price * #{Spree::LineItem.table_name}.quantity) END), 0) AS completed_orders_total"
+        ).
         group("#{Spree::Product.table_name}.id").
         order(completed_orders_count: order_direction, completed_orders_total: order_direction)
     }
@@ -254,20 +256,18 @@ module Spree
     delegate :display_amount, :display_price, :has_default_price?, :track_inventory?,
              :display_compare_at_price, :images, to: :default_variant
 
-    delegate :name, to: :brand, prefix: true, allow_nil: true
-
     alias master_images images
 
     state_machine :status, initial: :draft do
       event :activate do
         transition to: :active
       end
-      after_transition to: :active, do: [:after_activate, :send_product_activated_webhook]
+      after_transition to: :active, do: [:after_activate, :send_product_activated_webhook, :publish_product_activated_event]
 
       event :archive do
         transition to: :archived
       end
-      after_transition to: :archived, do: [:after_archive, :send_product_archived_webhook]
+      after_transition to: :archived, do: [:after_archive, :send_product_archived_webhook, :publish_product_archived_event]
 
       event :draft do
         transition to: :draft
@@ -345,11 +345,11 @@ module Spree
     # Returns default Image for Product
     # @return [Spree::Image]
     def default_image
-      @default_image ||= if images.size.positive?
+      @default_image ||= if images.any?
                            images.first
-                         elsif default_variant.images.size.positive?
+                         elsif default_variant.images.any?
                            default_variant.default_image
-                         elsif variant_images.size.positive?
+                         elsif variant_images.any?
                            variant_images.first
                          end
     end
@@ -376,7 +376,7 @@ module Spree
     end
 
     # Returns tax category for Product
-    # @return [Spree::TaxCategory]
+    # @return [Spree::TaxCategory, nil]
     def tax_category
       @tax_category ||= super || TaxCategory.default
     end
@@ -549,7 +549,22 @@ module Spree
       super || variants_including_master.with_deleted.find_by(is_master: true)
     end
 
+    # Returns the brand for the product
+    # If a brand association is defined (e.g., belongs_to :brand), it will be used
+    # Otherwise, falls back to brand_taxon for compatibility
+    # @return [Spree::Brand, Spree::Taxon]
     def brand
+      if self.class.reflect_on_association(:brand)
+        super
+      else
+        Spree::Deprecation.warn('Spree::Product#brand is deprecated and will be removed in Spree 6. Please use Spree::Product#brand_taxon instead.')
+        brand_taxon
+      end
+    end
+
+    # Returns the brand taxon for the product
+    # @return [Spree::Taxon]
+    def brand_taxon
       @brand ||= if Spree.use_translations?
                    taxons.joins(:taxonomy).
                      join_translation_table(Taxonomy).
@@ -563,7 +578,28 @@ module Spree
                  end
     end
 
+    # Returns the brand name for the product
+    # @return [String]
+    def brand_name
+      brand&.name
+    end
+
+    # Returns the category for the product
+    # If a category association is defined (e.g., belongs_to :category), it will be used
+    # Otherwise, falls back to category_taxon for compatibility
+    # @return [Spree::Category, Spree::Taxon]
     def category
+      if self.class.reflect_on_association(:category)
+        super
+      else
+        Spree::Deprecation.warn('Spree::Product#category is deprecated and will be removed in Spree 6. Please use Spree::Product#category_taxon instead.')
+        category_taxon
+      end
+    end
+
+    # Returns the category taxon for the product
+    # @return [Spree::Taxon]
+    def category_taxon
       @category ||= if Spree.use_translations?
                       taxons.joins(:taxonomy).
                         join_translation_table(Taxonomy).
@@ -579,7 +615,7 @@ module Spree
     end
 
     def main_taxon
-      category || taxons.first
+      category_taxon || taxons.first
     end
 
     def taxons_for_store(store)
@@ -602,7 +638,7 @@ module Spree
     #
     # @return [Boolean]
     def digital?
-      shipping_category&.shipping_methods&.any? { |method| method.calculator.is_a?(Spree::Calculator::Shipping::DigitalDelivery) }
+      @digital ||= shipping_category&.includes_digital_shipping_method?
     end
 
     def auto_match_taxons
@@ -617,11 +653,18 @@ module Spree
 
     def to_csv(store = nil)
       store ||= stores.default || stores.first
-      properties_for_csv ||= Spree::Property.order(:position).flat_map do |property|
-        [
-          property.name,
-          product_properties.find { |pp| pp.property_id == property.id }&.value
-        ]
+      properties_for_csv = if Spree::Config[:product_properties_enabled]
+        Spree::Property.order(:position).flat_map do |property|
+          [
+            property.name,
+            product_properties.find { |pp| pp.property_id == property.id }&.value
+          ]
+        end
+      else
+        []
+      end
+      metafields_for_csv ||= Spree::MetafieldDefinition.for_resource_type('Spree::Product').order(:namespace, :key).map do |mf_def|
+        metafields.find { |mf| mf.metafield_definition_id == mf_def.id }&.csv_value
       end
       taxons_for_csv ||= taxons.manual.reorder(depth: :desc).first(3).pluck(:pretty_name)
       taxons_for_csv.fill(nil, taxons_for_csv.size...3)
@@ -630,19 +673,14 @@ module Spree
 
       if has_variants?
         variants_including_master.each_with_index do |variant, index|
-          csv_lines << Spree::CSV::ProductVariantPresenter.new(self, variant, index, properties_for_csv, taxons_for_csv, store).call
+          csv_lines << Spree::CSV::ProductVariantPresenter.new(self, variant, index, properties_for_csv, taxons_for_csv, store,
+                                                               metafields_for_csv).call
         end
       else
-        csv_lines << Spree::CSV::ProductVariantPresenter.new(self, master, 0, properties_for_csv, taxons_for_csv, store).call
+        csv_lines << Spree::CSV::ProductVariantPresenter.new(self, master, 0, properties_for_csv, taxons_for_csv, store, metafields_for_csv).call
       end
 
       csv_lines
-    end
-
-    def page_builder_url
-      return unless Spree::Core::Engine.routes.url_helpers.respond_to?(:product_path)
-
-      Spree::Core::Engine.routes.url_helpers.product_path(self)
     end
 
     private
@@ -810,6 +848,14 @@ module Spree
 
     def after_draft
       # Implement your logic here
+    end
+
+    def publish_product_activated_event
+      publish_event('product.activated')
+    end
+
+    def publish_product_archived_event
+      publish_event('product.archived')
     end
   end
 end
